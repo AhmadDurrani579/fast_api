@@ -4,3 +4,4 @@ sqlalchemy
 pymysql
 bcrypt
 pydantic[email]
+psycopg2-binary
