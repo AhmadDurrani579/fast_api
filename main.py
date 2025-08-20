@@ -3,6 +3,7 @@ from pydantic import BaseModel, EmailStr
 from sqlalchemy import create_engine, Column, Integer, String
 from sqlalchemy.orm import sessionmaker, declarative_base, Session
 import bcrypt
+from starlette.middleware.cors import CORSMiddleware
 
 
 # ----------------- MySQL Connection -----------------
@@ -22,6 +23,14 @@ class UserDB(Base):
 
 
 app = FastAPI()
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],          # allow all origins
+    allow_credentials=False,      # must be False when using "*"
+    allow_methods=["*"],          # GET, POST, PUT, DELETE, OPTIONS, ...
+    allow_headers=["*"],          # Authorization, Content-Type, etc.
+)
 
 # Dependency for getting DB session in routes
 def get_db():
