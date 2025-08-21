@@ -96,11 +96,12 @@ class PostDB(Base):
     __tablename__ = "posts"
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("user_accounts.id", ondelete="CASCADE"), nullable=False)
-    content = Column(Text, nullable=True)                 # text body (optional)
-    image_url = Column(String(300), nullable=True)        # store public URL or /uploads/<file>
+    content = Column(Text, nullable=True)
+    image_url = Column(String(300), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
-    user = relationship("UserDB")  # optional convenience
+    comments = relationship("CommentDB", backref="post", cascade="all, delete-orphan")
+
 
 class CommentDB(Base):
     __tablename__ = "comments"
@@ -119,10 +120,10 @@ class CommentCreate(BaseModel):
 class CommentOut(BaseModel):
     id: int
     content: str
-    post_id: int
     user_id: int
+    post_id: int
     created_at: datetime
-    model_config = ConfigDict(from_attributes=True)  # pydantic v2
+    model_config = ConfigDict(from_attributes=True)
 
 class PostWithComments(BaseModel):
     id: int
@@ -130,9 +131,8 @@ class PostWithComments(BaseModel):
     content: Optional[str] = None
     image_url: Optional[str] = None
     created_at: datetime
-    comments: List[CommentOut] = []   # 👈 include comments array
+    comments: List[CommentOut] = []   # include comments array
     model_config = ConfigDict(from_attributes=True)
-
 
 
 @app.get("/")
@@ -258,19 +258,30 @@ def get_post(post_id: int, db: Session = Depends(get_db)):
 
 # List posts (for a specific user) with comments
 
-@router.get("/posts", response_model=List[PostWithComments])
+@app.get("/posts", response_model=List[PostWithComments])
 def list_posts(
-    user_id: Optional[int] = None,        # <-- not required anymore
-    limit: Optional[int] = None,
+    user_id: int | None = None,
+    limit: int | None = None,
     db: Session = Depends(get_db),
 ):
-    q = db.query(PostDB).options(selectinload(PostDB.comments)).order_by(PostDB.created_at.desc())
+    try:
+        q = (
+            db.query(PostDB)
+              .options(selectinload(PostDB.comments))  # <- eager load comments
+              .order_by(PostDB.created_at.desc())
+        )
+        if user_id is not None:
+            q = q.filter(PostDB.user_id == user_id)
+        if limit is not None:
+            q = q.limit(limit)
 
-    # filter only if user_id is passed
-    if user_id is not None:
-        q = q.filter(PostDB.user_id == user_id)
+        posts = q.all()
 
-    if limit is not None:
-        q = q.limit(limit)
+        # sort each post's comments newest-first; also guard against null created_at
+        for p in posts:
+            p.comments.sort(key=lambda c: c.created_at or datetime.min, reverse=True)
 
-    return q.all()
+        return posts
+    except Exception as e:
+        print("GET /posts failed:", repr(e))  # visible in Render logs
+        raise HTTPException(status_code=500, detail="Failed to load posts")
