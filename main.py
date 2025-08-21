@@ -260,28 +260,26 @@ def get_post(post_id: int, db: Session = Depends(get_db)):
 
 @app.get("/posts", response_model=List[PostWithComments])
 def list_posts(
-    user_id: int | None = None,
     limit: int | None = None,
     db: Session = Depends(get_db),
 ):
     try:
         q = (
             db.query(PostDB)
-              .options(selectinload(PostDB.comments))  # <- eager load comments
+              .options(selectinload(PostDB.comments))  # eager load comments
               .order_by(PostDB.created_at.desc())
         )
-        if user_id is not None:
-            q = q.filter(PostDB.user_id == user_id)
+
         if limit is not None:
             q = q.limit(limit)
 
         posts = q.all()
 
-        # sort each post's comments newest-first; also guard against null created_at
+        # sort each post's comments newest-first
         for p in posts:
             p.comments.sort(key=lambda c: c.created_at or datetime.min, reverse=True)
 
         return posts
     except Exception as e:
-        print("GET /posts failed:", repr(e))  # visible in Render logs
+        print("GET /posts failed:", repr(e))  # check Render logs for real error
         raise HTTPException(status_code=500, detail="Failed to load posts")
