@@ -13,6 +13,7 @@ from typing import Optional, List
 from fastapi import File, UploadFile, Form
 from starlette.staticfiles import StaticFiles
 from pydantic import BaseModel as PModel
+from typing import Optional, List
 
 # ----------------- MySQL Connection -----------------
 DATABASE_URL = "postgresql+psycopg2://city_university_db_user:au84DXp5L55SYrir23DzrezulwqSJZzc@dpg-d2gitojuibrs73ed7s00-a.oregon-postgres.render.com:5432/city_university_db"
@@ -170,5 +171,14 @@ async def create_post(
 
 
 @app.get("/posts", response_model=List[PostOut])
-def list_posts(db: Session = Depends(get_db)):
-    return db.query(PostDB).order_by(PostDB.created_at.desc()).all()
+def list_posts(
+    user_id: Optional[int] = None,   # ← pass ?user_id=1
+    limit: Optional[int] = None,     # ← optional
+    db: Session = Depends(get_db),
+):
+    q = db.query(PostDB).order_by(PostDB.created_at.desc())
+    if user_id is not None:
+        q = q.filter(PostDB.user_id == user_id)
+    if limit is not None:
+        q = q.limit(limit)
+    return q.all()
