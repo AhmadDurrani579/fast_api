@@ -170,15 +170,16 @@ async def create_post(
 
 
 
-@app.get("/posts", response_model=List[PostOut])
-def list_posts(
-    user_id: Optional[int] = None,   # ← pass ?user_id=1
-    limit: Optional[int] = None,     # ← optional
+@app.get("/users/{user_id}/posts", response_model=List[PostOut])
+def list_user_posts(
+    user_id: int,
+    limit: int = 20,
     db: Session = Depends(get_db),
 ):
-    q = db.query(PostDB).order_by(PostDB.created_at.desc())
-    if user_id is not None:
-        q = q.filter(PostDB.user_id == user_id)
-    if limit is not None:
-        q = q.limit(limit)
-    return q.all()
+    return (
+        db.query(PostDB)
+        .filter(PostDB.user_id == user_id)
+        .order_by(PostDB.created_at.desc())
+        .limit(limit)
+        .all()
+    )
