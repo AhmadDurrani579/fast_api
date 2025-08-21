@@ -15,6 +15,8 @@ from starlette.staticfiles import StaticFiles
 from pydantic import BaseModel as PModel
 from typing import Optional, List
 from sqlalchemy.orm import selectinload
+from fastapi import Depends, APIRouter
+from sqlalchemy.orm import Session, selectinload
 
 
 # ----------------- MySQL Connection -----------------
@@ -25,6 +27,7 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 
 app = FastAPI()
+router = APIRouter()
 
 
 
@@ -255,9 +258,19 @@ def get_post(post_id: int, db: Session = Depends(get_db)):
 
 # List posts (for a specific user) with comments
 
-@app.get("/posts", response_model=List[PostWithComments])
-def list_all_posts(limit: int | None = None, db: Session = Depends(get_db)):
+@router.get("/posts", response_model=List[PostWithComments])
+def list_posts(
+    user_id: Optional[int] = None,        # <-- not required anymore
+    limit: Optional[int] = None,
+    db: Session = Depends(get_db),
+):
     q = db.query(PostDB).options(selectinload(PostDB.comments)).order_by(PostDB.created_at.desc())
+
+    # filter only if user_id is passed
+    if user_id is not None:
+        q = q.filter(PostDB.user_id == user_id)
+
     if limit is not None:
         q = q.limit(limit)
+
     return q.all()
