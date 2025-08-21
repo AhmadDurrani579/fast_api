@@ -4,7 +4,7 @@ from sqlalchemy import create_engine, Column, Integer, String
 from sqlalchemy.orm import sessionmaker, declarative_base, Session
 import bcrypt
 from starlette.middleware.cors import CORSMiddleware
-from sqlalchemy import ForeignKey, DateTime, Text
+from sqlalchemy import ForeignKey, DateTime, Text, func
 from sqlalchemy.orm import relationship
 from datetime import datetime
 
@@ -99,7 +99,27 @@ class PostDB(Base):
 
     user = relationship("UserDB")  # optional convenience
 
-    
+class CommentDB(Base):
+    __tablename__ = "comments"
+    id = Column(Integer, primary_key=True, index=True)
+    content = Column(Text, nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+    post_id = Column(Integer, ForeignKey("posts.id", ondelete="CASCADE"), nullable=False)
+    user_id = Column(Integer, ForeignKey("user_accounts.id", ondelete="CASCADE"), nullable=False)
+
+class CommentCreate(BaseModel):
+    content: str
+    post_id: int
+    user_id: int
+
+class CommentOut(BaseModel):
+    id: int
+    content: str
+    post_id: int
+    user_id: int
+    created_at: datetime
+    model_config = ConfigDict(from_attributes=True)  # pydantic v2
 
 @app.get("/")
 def home():
@@ -190,4 +210,37 @@ def list_user_posts(
         .order_by(PostDB.created_at.desc())
         .limit(limit)
         .all()
+    )
+
+
+# Create a comment
+@app.post("/comments", response_model=CommentOut, status_code=201)
+def create_comment(payload: CommentCreate, db: Session = Depends(get_db)):
+    # Ensure the post and user exist (helps avoid FK errors with clearer messages)
+    post = db.query(PostDB).filter(PostDB.id == payload.post_id).first()
+    if not post:
+        raise HTTPException(status_code=404, detail="Post not found")
+    user = db.query(UserDB).filter(UserDB.id == payload.user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    comment = CommentDB(**payload.model_dump())
+    db.add(comment)
+    db.commit()
+    db.refresh(comment)
+    return comment
+
+# List all comments for a post (latest first)
+@app.get("/posts/{post_id}/comments", response_model=List[CommentOut])
+def list_comments(post_id: int, db: Session = Depends(get_db)):
+    # Optional: ensure post exists (return 404 instead of empty)
+    post = db.query(PostDB).filter(PostDB.id == post_id).first()
+    if not post:
+        raise HTTPException(status_code=404, detail="Post not found")
+
+    return (
+        db.query(CommentDB)
+          .filter(CommentDB.post_id == post_id)
+          .order_by(CommentDB.created_at.desc())
+          .all()
     )
