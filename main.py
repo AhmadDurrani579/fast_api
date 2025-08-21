@@ -139,42 +139,35 @@ async def create_post(
     image: Optional[UploadFile] = File(None),
     db: Session = Depends(get_db),
 ):
-    print(f"DEBUG incoming: user_id={user_id}, content={content}, image={image.filename if image else None}")
-    try:
-        # your existing code...
-        if (not content or not content.strip()) and image is None:
-            raise HTTPException(status_code=400, detail="Provide content or an image")
+    # normalize content
+    content = (content or "").strip()
+    # treat empty file input as no image
+    if image is not None and not getattr(image, "filename", ""):
+        image = None
 
-        user = db.get(UserDB, user_id)
-        if not user:
-            raise HTTPException(status_code=404, detail="User not found")
+    if not content and image is None:
+        raise HTTPException(status_code=400, detail="Provide content or an image")
 
-        image_url = None
-        if image is not None:
-            allowed = {"image/png", "image/jpeg", "image/jpg", "image/webp"}
-            if image.content_type not in allowed:
-                raise HTTPException(status_code=415, detail="Unsupported image type")
-            ext = {
-                "image/png": ".png",
-                "image/jpeg": ".jpg",
-                "image/jpg": ".jpg",
-                "image/webp": ".webp"
-            }[image.content_type]
-            filename = f"{uuid.uuid4().hex}{ext}"
-            path = os.path.join(UPLOAD_DIR, filename)
-            with open(path, "wb") as f:
-                f.write(await image.read())
-            image_url = f"/uploads/{filename}"
+    user = db.get(UserDB, user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
 
-        post = PostDB(user_id=user_id, content=content, image_url=image_url)
-        db.add(post)
-        db.commit()
-        db.refresh(post)
-        return post
+    image_url = None
+    if image is not None:
+        allowed = {"image/png", "image/jpeg", "image/jpg", "image/webp"}
+        if image.content_type not in allowed:
+            raise HTTPException(status_code=415, detail="Unsupported image type")
+        ext = { "image/png": ".png", "image/jpeg": ".jpg", "image/jpg": ".jpg", "image/webp": ".webp" }[image.content_type]
+        filename = f"{uuid.uuid4().hex}{ext}"
+        with open(os.path.join(UPLOAD_DIR, filename), "wb") as f:
+            f.write(await image.read())
+        image_url = f"/uploads/{filename}"
 
-    except Exception as e:
-        print("ERROR in /posts:", e)
-        raise
+    post = PostDB(user_id=user_id, content=content or None, image_url=image_url)
+    db.add(post); db.commit(); db.refresh(post)
+    return post
+
+
 
 @app.get("/posts", response_model=List[PostOut])
 def list_posts(limit: int = 20, db: Session = Depends(get_db)):
