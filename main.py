@@ -126,12 +126,10 @@ def signup(user: UserSignup, db: Session = Depends(get_db)):
 @app.post("/login", response_model=UserOut)
 def login(user: UserLogin, db: Session = Depends(get_db)):
     db_user = db.query(UserDB).filter(UserDB.email == user.email).first()
-    if not db_user:
+    if not db_user or not bcrypt.checkpw(user.password.encode('utf-8'), db_user.password.encode('utf-8')):
         raise HTTPException(status_code=400, detail="Invalid email or password")
-    if not bcrypt.checkpw(user.password.encode('utf-8'), db_user.password.encode('utf-8')):
-        raise HTTPException(status_code=400, detail="Invalid email or password")
+    return db_user     # << return the user, not {"message": ...}
 
-    return db_user
 @app.post("/forgot-password")
 def forgot_password(reset: ResetPassword, db: Session = Depends(get_db)):
     db_user = db.query(UserDB).filter(UserDB.email == reset.email).first()
