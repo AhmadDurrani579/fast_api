@@ -170,8 +170,5 @@ async def create_post(
 
 
 @app.get("/posts", response_model=List[PostOut])
-def list_posts(limit: int | None = None, db: Session = Depends(get_db)):
-    query = db.query(PostDB).order_by(PostDB.created_at.desc())
-    if limit:
-        query = query.limit(limit)
-    return query.all()
+def list_posts(db: Session = Depends(get_db)):
+    return db.query(PostDB).order_by(PostDB.created_at.desc()).all()
