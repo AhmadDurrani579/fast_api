@@ -14,7 +14,7 @@ from fastapi import File, UploadFile, Form
 from starlette.staticfiles import StaticFiles
 from pydantic import BaseModel as PModel
 from typing import Optional, List
-
+from sqlalchemy.orm import selectinload
 
 
 # ----------------- MySQL Connection -----------------
@@ -120,6 +120,17 @@ class CommentOut(BaseModel):
     user_id: int
     created_at: datetime
     model_config = ConfigDict(from_attributes=True)  # pydantic v2
+
+class PostWithComments(BaseModel):
+    id: int
+    user_id: int
+    content: Optional[str] = None
+    image_url: Optional[str] = None
+    created_at: datetime
+    comments: List[CommentOut] = []   # 👈 include comments array
+    model_config = ConfigDict(from_attributes=True)
+
+
 
 @app.get("/")
 def home():
@@ -230,17 +241,39 @@ def create_comment(payload: CommentCreate, db: Session = Depends(get_db)):
     db.refresh(comment)
     return comment
 
-# List all comments for a post (latest first)
-@app.get("/posts/{post_id}/comments", response_model=List[CommentOut])
-def list_comments(post_id: int, db: Session = Depends(get_db)):
-    # Optional: ensure post exists (return 404 instead of empty)
-    post = db.query(PostDB).filter(PostDB.id == post_id).first()
+# Single post with comments
+@app.get("/posts/{post_id}", response_model=PostWithComments)
+def get_post(post_id: int, db: Session = Depends(get_db)):
+    post = (
+        db.query(PostDB)
+          .options(selectinload(PostDB.comments))  # eager load comments
+          .filter(PostDB.id == post_id)
+          .first()
+    )
     if not post:
         raise HTTPException(status_code=404, detail="Post not found")
+    # Optionally order comments newest-first in memory:
+    post.comments.sort(key=lambda c: c.created_at, reverse=True)
+    return post
 
-    return (
-        db.query(CommentDB)
-          .filter(CommentDB.post_id == post_id)
-          .order_by(CommentDB.created_at.desc())
-          .all()
+# List posts (for a specific user) with comments
+@app.get("/posts", response_model=List[PostWithComments])
+def list_posts(
+    user_id: int,                       # required as you asked
+    limit: Optional[int] = None,
+    db: Session = Depends(get_db),
+):
+    q = (
+        db.query(PostDB)
+          .options(selectinload(PostDB.comments))  # eager load comments
+          .filter(PostDB.user_id == user_id)
+          .order_by(PostDB.created_at.desc())
     )
+    if limit is not None:
+        q = q.limit(limit)
+    posts = q.all()
+
+    # Optional: order comments for each post
+    for p in posts:
+        p.comments.sort(key=lambda c: c.created_at, reverse=True)
+    return posts
