@@ -1,5 +1,5 @@
 from fastapi import FastAPI, Depends, HTTPException
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, ConfigDict
 from sqlalchemy import create_engine, Column, Integer, String
 from sqlalchemy.orm import sessionmaker, declarative_base, Session
 import bcrypt
@@ -14,6 +14,8 @@ from fastapi import File, UploadFile, Form
 from starlette.staticfiles import StaticFiles
 from pydantic import BaseModel as PModel
 from typing import Optional, List
+
+
 
 # ----------------- MySQL Connection -----------------
 DATABASE_URL = "postgresql+psycopg2://city_university_db_user:au84DXp5L55SYrir23DzrezulwqSJZzc@dpg-d2gitojuibrs73ed7s00-a.oregon-postgres.render.com:5432/city_university_db"
@@ -70,6 +72,13 @@ class ResetPassword(BaseModel):
     email: EmailStr
     new_password: str
 
+class UserOut(BaseModel):
+    id: int
+    full_name: str
+    email: EmailStr
+    model_config = ConfigDict(from_attributes=True)  # pydantic v2
+
+
 class PostOut(PModel):
     id: int
     user_id: int
@@ -111,17 +120,18 @@ def signup(user: UserSignup, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(new_user)
 
-    return {"message": "User registered successfully", "user_id": new_user.id}# class Item(BaseModel):
+    return new_user
 
-@app.post("/login")
+
+@app.post("/login", response_model=UserOut)
 def login(user: UserLogin, db: Session = Depends(get_db)):
     db_user = db.query(UserDB).filter(UserDB.email == user.email).first()
     if not db_user:
         raise HTTPException(status_code=400, detail="Invalid email or password")
     if not bcrypt.checkpw(user.password.encode('utf-8'), db_user.password.encode('utf-8')):
         raise HTTPException(status_code=400, detail="Invalid email or password")
-    return {"message": f"Welcome back, {db_user.full_name}!"}
 
+    return db_user
 @app.post("/forgot-password")
 def forgot_password(reset: ResetPassword, db: Session = Depends(get_db)):
     db_user = db.query(UserDB).filter(UserDB.email == reset.email).first()
