@@ -209,19 +209,16 @@ async def create_post(
 
 
 
-@app.get("/users/{user_id}/posts", response_model=List[PostOut])
-def list_user_posts(
-    user_id: int,
-    limit: int = 20,
-    db: Session = Depends(get_db),
-):
-    return (
-        db.query(PostDB)
-        .filter(PostDB.user_id == user_id)
-        .order_by(PostDB.created_at.desc())
-        .limit(limit)
-        .all()
-    )
+@app.get("/users/{user_id}/posts", response_model=List[PostWithComments])
+def list_user_posts(user_id: int, limit: int | None = None, db: Session = Depends(get_db)):
+    q = (db.query(PostDB)
+           .options(selectinload(PostDB.comments))
+           .filter(PostDB.user_id == user_id)
+           .order_by(PostDB.created_at.desc()))
+    if limit is not None:
+        q = q.limit(limit)
+    return q.all()
+
 
 
 # Create a comment
@@ -257,23 +254,10 @@ def get_post(post_id: int, db: Session = Depends(get_db)):
     return post
 
 # List posts (for a specific user) with comments
+
 @app.get("/posts", response_model=List[PostWithComments])
-def list_posts(
-    user_id: int,                       # required as you asked
-    limit: Optional[int] = None,
-    db: Session = Depends(get_db),
-):
-    q = (
-        db.query(PostDB)
-          .options(selectinload(PostDB.comments))  # eager load comments
-          .filter(PostDB.user_id == user_id)
-          .order_by(PostDB.created_at.desc())
-    )
+def list_all_posts(limit: int | None = None, db: Session = Depends(get_db)):
+    q = db.query(PostDB).options(selectinload(PostDB.comments)).order_by(PostDB.created_at.desc())
     if limit is not None:
         q = q.limit(limit)
-    posts = q.all()
-
-    # Optional: order comments for each post
-    for p in posts:
-        p.comments.sort(key=lambda c: c.created_at, reverse=True)
-    return posts
+    return q.all()
