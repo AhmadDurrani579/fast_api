@@ -105,8 +105,8 @@ class PostDB(Base):
     image_url = Column(String(300), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
+    user = relationship("UserDB")                     # 👈 author
     comments = relationship("CommentDB", backref="post", cascade="all, delete-orphan")
-
 
 class CommentDB(Base):
     __tablename__ = "comments"
@@ -181,22 +181,18 @@ def forgot_password(reset: ResetPassword, db: Session = Depends(get_db)):
     db.commit()
     return {"message": "Password updated successfully"}
 
-@app.post("/posts", response_model=PostOut)
+@app.post("/posts", response_model=PostWithComments, status_code=201)
 async def create_post(
     user_id: int = Form(...),
     content: Optional[str] = Form(None),
     image: Optional[UploadFile] = File(None),
     db: Session = Depends(get_db),
 ):
-    # normalize content
-    content = (content or "").strip()
-    # treat empty file input as no image
-    if image is not None and not getattr(image, "filename", ""):
-        image = None
-
-    if not content and image is None:
+    # require at least one of content or image
+    if (not content or not content.strip()) and image is None:
         raise HTTPException(status_code=400, detail="Provide content or an image")
 
+    # verify user exists
     user = db.get(UserDB, user_id)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
@@ -206,16 +202,29 @@ async def create_post(
         allowed = {"image/png", "image/jpeg", "image/jpg", "image/webp"}
         if image.content_type not in allowed:
             raise HTTPException(status_code=415, detail="Unsupported image type")
-        ext = { "image/png": ".png", "image/jpeg": ".jpg", "image/jpg": ".jpg", "image/webp": ".webp" }[image.content_type]
+        ext = {
+            "image/png": ".png",
+            "image/jpeg": ".jpg",
+            "image/jpg": ".jpg",
+            "image/webp": ".webp"
+        }[image.content_type]
         filename = f"{uuid.uuid4().hex}{ext}"
-        with open(os.path.join(UPLOAD_DIR, filename), "wb") as f:
+        path = os.path.join(UPLOAD_DIR, filename)
+        with open(path, "wb") as f:
             f.write(await image.read())
         image_url = f"/uploads/{filename}"
 
-    post = PostDB(user_id=user_id, content=content or None, image_url=image_url)
-    db.add(post); db.commit(); db.refresh(post)
-    return post
+    # create post
+    post = PostDB(user_id=user_id, content=content, image_url=image_url)
+    db.add(post)
+    db.commit()
+    db.refresh(post)
 
+    # 👇 ensure relationships are loaded before returning
+    _ = post.user          # author
+    post.comments = []     # empty list on new post
+
+    return post
 
 
 @app.get("/users/{user_id}/posts", response_model=List[PostWithComments])
@@ -273,19 +282,21 @@ def get_post(post_id: int, db: Session = Depends(get_db)):
 
 # List posts (for a specific user) with comments
 
-@app.get("/posts", response_model=List[PostWithComments])
-def list_posts(
-    limit: int | None = None,
-    db: Session = Depends(get_db),
-):
+@app.get("/posts", response_model=list[PostWithComments])
+def list_posts(limit: int | None = None, db: Session = Depends(get_db)):
     q = (
         db.query(PostDB)
-          .options(selectinload(PostDB.comments))
+          .options(
+              selectinload(PostDB.user),                        # 👈 author
+              selectinload(PostDB.comments).selectinload(CommentDB.user),  # 👈 commenters
+          )
           .order_by(PostDB.created_at.desc())
     )
     if limit is not None:
         q = q.limit(limit)
+
     posts = q.all()
+    # newest comments first (optional)
     for p in posts:
         p.comments.sort(key=lambda c: c.created_at or datetime.min, reverse=True)
     return posts
