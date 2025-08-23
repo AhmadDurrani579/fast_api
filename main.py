@@ -81,6 +81,11 @@ class UserOut(BaseModel):
     email: EmailStr
     model_config = ConfigDict(from_attributes=True)  # pydantic v2
 
+class UserLite(BaseModel):
+    id: int
+    full_name: str
+    model_config = ConfigDict(from_attributes=True)
+
 
 class PostOut(PModel):
     id: int
@@ -123,6 +128,7 @@ class CommentOut(BaseModel):
     user_id: int
     post_id: int
     created_at: datetime
+    user: UserLite           
     model_config = ConfigDict(from_attributes=True)
 
 class PostWithComments(BaseModel):
