@@ -112,10 +112,10 @@ class CommentDB(Base):
     __tablename__ = "comments"
     id = Column(Integer, primary_key=True, index=True)
     content = Column(Text, nullable=False)
-    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
-
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     post_id = Column(Integer, ForeignKey("posts.id", ondelete="CASCADE"), nullable=False)
     user_id = Column(Integer, ForeignKey("user_accounts.id", ondelete="CASCADE"), nullable=False)
+    user = relationship("UserDB")  # <-- needed
 
 class CommentCreate(BaseModel):
     content: str
@@ -128,9 +128,9 @@ class CommentOut(BaseModel):
     user_id: int
     post_id: int
     created_at: datetime
-    user: UserLite           
+    user: UserLite
     model_config = ConfigDict(from_attributes=True)
-
+    
 class PostWithComments(BaseModel):
     id: int
     user_id: int
@@ -233,19 +233,33 @@ def list_user_posts(user_id: int, limit: int | None = None, db: Session = Depend
 # Create a comment
 @app.post("/comments", response_model=CommentOut, status_code=201)
 def create_comment(payload: CommentCreate, db: Session = Depends(get_db)):
-    # Ensure the post and user exist (helps avoid FK errors with clearer messages)
-    post = db.query(PostDB).filter(PostDB.id == payload.post_id).first()
+    # 1) Validate post and user exist (prevents FK 500s)
+    post = db.get(PostDB, payload.post_id)
     if not post:
         raise HTTPException(status_code=404, detail="Post not found")
-    user = db.query(UserDB).filter(UserDB.id == payload.user_id).first()
+
+    user = db.get(UserDB, payload.user_id)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
-    comment = CommentDB(**payload.model_dump())
+    # 2) Create the comment
+    comment = CommentDB(
+        content=payload.content,
+        post_id=payload.post_id,
+        user_id=payload.user_id,
+    )
     db.add(comment)
     db.commit()
-    db.refresh(comment)
+
+    # 3) Re‑query with the user relation eagerly loaded
+    comment = (
+        db.query(CommentDB)
+          .options(selectinload(CommentDB.user))
+          .get(comment.id)
+    )
+
     return comment
+
 
 # Single post with comments
 @app.get("/posts/{post_id}", response_model=PostWithComments)
