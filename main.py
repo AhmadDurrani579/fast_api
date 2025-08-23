@@ -137,6 +137,7 @@ class PostWithComments(BaseModel):
     content: Optional[str] = None
     image_url: Optional[str] = None
     created_at: datetime
+    user: UserLite                    # 👈 include author here
     comments: List[CommentOut] = []   # include comments array
     model_config = ConfigDict(from_attributes=True)
 
@@ -287,8 +288,8 @@ def list_posts(limit: int | None = None, db: Session = Depends(get_db)):
     q = (
         db.query(PostDB)
           .options(
-              selectinload(PostDB.user),                        # 👈 author
-              selectinload(PostDB.comments).selectinload(CommentDB.user),  # 👈 commenters
+              selectinload(PostDB.user),                                  # 👈 author
+              selectinload(PostDB.comments).selectinload(CommentDB.user), # 👈 commenters
           )
           .order_by(PostDB.created_at.desc())
     )
@@ -296,7 +297,6 @@ def list_posts(limit: int | None = None, db: Session = Depends(get_db)):
         q = q.limit(limit)
 
     posts = q.all()
-    # newest comments first (optional)
     for p in posts:
         p.comments.sort(key=lambda c: c.created_at or datetime.min, reverse=True)
     return posts
