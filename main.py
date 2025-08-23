@@ -130,7 +130,7 @@ class CommentOut(BaseModel):
     created_at: datetime
     user: UserLite
     model_config = ConfigDict(from_attributes=True)
-    
+
 class PostWithComments(BaseModel):
     id: int
     user_id: int
@@ -233,16 +233,15 @@ def list_user_posts(user_id: int, limit: int | None = None, db: Session = Depend
 # Create a comment
 @app.post("/comments", response_model=CommentOut, status_code=201)
 def create_comment(payload: CommentCreate, db: Session = Depends(get_db)):
-    # 1) Validate post and user exist (prevents FK 500s)
+    # Validate foreign keys up front (gives 404 instead of DB 500)
     post = db.get(PostDB, payload.post_id)
     if not post:
         raise HTTPException(status_code=404, detail="Post not found")
-
     user = db.get(UserDB, payload.user_id)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
-    # 2) Create the comment
+    # Create the comment
     comment = CommentDB(
         content=payload.content,
         post_id=payload.post_id,
@@ -250,16 +249,12 @@ def create_comment(payload: CommentCreate, db: Session = Depends(get_db)):
     )
     db.add(comment)
     db.commit()
+    db.refresh(comment)
 
-    # 3) Re‑query with the user relation eagerly loaded
-    comment = (
-        db.query(CommentDB)
-          .options(selectinload(CommentDB.user))
-          .get(comment.id)
-    )
-
+    # Ensure the `user` relation is present on the returned object
+    # (either touch it to lazy-load, or eager-load with a second query)
+    _ = comment.user  # touch to populate
     return comment
-
 
 # Single post with comments
 @app.get("/posts/{post_id}", response_model=PostWithComments)
