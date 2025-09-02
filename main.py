@@ -20,7 +20,8 @@ from sqlalchemy.orm import Session, selectinload
 
 
 # ----------------- MySQL Connection -----------------
-DATABASE_URL = "postgresql+psycopg2://city_university_db_user:au84DXp5L55SYrir23DzrezulwqSJZzc@dpg-d2gitojuibrs73ed7s00-a.oregon-postgres.render.com:5432/city_university_db"
+DATABASE_URL = "mysql+pymysql://root@127.0.0.1:3306/city_university_db"
+# DATABASE_URL = "postgresql+psycopg2://city_university_db_user:au84DXp5L55SYrir23DzrezulwqSJZzc@dpg-d2gitojuibrs73ed7s00-a.oregon-postgres.render.com:5432/city_university_db"
 engine = create_engine(DATABASE_URL, pool_pre_ping=True)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 # ----------------- ORM Model (matches user_accounts table) -----------------

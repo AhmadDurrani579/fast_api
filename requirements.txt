@@ -1,7 +1,8 @@
 fastapi
 uvicorn
 sqlalchemy
-psycopg2-binary
+pymysql            # ← add this for MySQL (XAMPP)
+psycopg2-binary    # keep if you also use Postgres (Render); remove if not needed
 bcrypt
 pydantic[email]
 python-multipart
