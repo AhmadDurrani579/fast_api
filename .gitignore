@@ -1,6 +1,18 @@
-venv/
+# Python
 __pycache__/
 *.pyc
 *.pyo
 *.pyd
-.DS_Store
+*.db
+*.sqlite3
+
+# Virtual env
+venv/
+.env
+
+# IDE
+.vscode/
+.idea/
+
+# Uploads
+uploads/
