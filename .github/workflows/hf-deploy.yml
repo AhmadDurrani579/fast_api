@@ -5,6 +5,9 @@ on:
     branches:
       - main
 
+permissions:
+  contents: write
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
@@ -16,20 +19,18 @@ jobs:
     - name: Install Git LFS
       run: |
         sudo apt-get update
-        sudo apt-get install git-lfs
+        sudo apt-get install -y git-lfs
         git lfs install
 
-    - name: Set up HuggingFace credentials
-      env:
-        HF_TOKEN: ${{ secrets.HF_TOKEN }}
+    - name: Configure Git
       run: |
         git config --global user.email "github-actions@github.com"
         git config --global user.name "github-actions"
-        git remote add space https://huggingface.co/spaces/AhmadYarAI/famfin-api
-        git fetch space || true
 
     - name: Push to HuggingFace Space
       env:
         HF_TOKEN: ${{ secrets.HF_TOKEN }}
       run: |
+        git remote add space https://huggingface.co/spaces/AhmadYarAI/famfin-api || true
+        git fetch space || true
         git push https://$HF_TOKEN@huggingface.co/spaces/AhmadYarAI/famfin-api HEAD:main --force
