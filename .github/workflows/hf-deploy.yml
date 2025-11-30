@@ -26,7 +26,7 @@ jobs:
         git config --global user.email "github-actions@github.com"
         git config --global user.name "github-actions"
         git remote add space https://huggingface.co/spaces/AhmadYarAI/famfin-api
-        git fetch space
+        git fetch space || true
 
     - name: Push to HuggingFace Space
       env:
