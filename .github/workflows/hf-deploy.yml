@@ -13,28 +13,36 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout code
+    - name: Checkout FULL history (no shallow clone)
       uses: actions/checkout@v3
+      with:
+        fetch-depth: 0
 
     - name: Install Git LFS
       run: |
         sudo apt-get update
         sudo apt-get install -y git-lfs
-        git lfs install
+        git lfs install --force
 
     - name: Configure Git
       run: |
         git config --global user.email "github-actions@github.com"
         git config --global user.name "github-actions"
 
-    # 👇 This is the updated step to fix the authentication issue 👇
     - name: Push to HuggingFace Space
       env:
-        # The HF_TOKEN secret is made available as an environment variable
         HF_TOKEN: ${{ secrets.HF_TOKEN }}
       run: |
         set -e
-        # PUSH DIRECTLY: Use the format https://USER:${HF_TOKEN}@host/repo
-        # This explicitly provides the token as the password for HTTP basic authentication.
-        # Make sure 'AhmadYarAI' is your correct Hugging Face username.
-        git push https://AhmadYarAI:${HF_TOKEN}@huggingface.co/spaces/AhmadYarAI/famfin-api HEAD:main --force
+
+        # Enable LFS tracking
+        git lfs track "*"
+        git add .gitattributes
+        git commit -m "LFS update" || true
+
+        # Force delete and re-add remote
+        git remote remove space 2>/dev/null || true
+        git remote add space https://AhmadYarAI:${HF_TOKEN}@huggingface.co/spaces/AhmadYarAI/famfin-api
+
+        # Push
+        git push space HEAD:main --force
