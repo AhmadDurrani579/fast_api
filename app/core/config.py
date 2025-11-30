@@ -3,7 +3,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     # DB
     DATABASE_URL: str
-
+    
     # JWT config (names MUST match what your code uses)
     JWT_SECRET: str = "changeme"
     JWT_ALGORITHM: str = "HS256"

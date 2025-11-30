@@ -33,7 +33,7 @@ from app.routers import auth, users, posts, comments, likes
 # create missing tables (won't alter existing columns)
 Base.metadata.create_all(bind=engine)
 
-app = FastAPI(title="City University API")
+app = FastAPI(title="FamFin API")
 
 # static uploads
 UPLOAD_DIR = os.path.join(os.getcwd(), "uploads")
@@ -51,14 +51,14 @@ app.add_middleware(
 
 @app.get("/")
 def root():
-    return {"message": "Hello FastAPI!"}
+    return {"message": "FamFin API is running 🚀"}
 
 # include routers
 app.include_router(auth.router)
-app.include_router(users.router)
-app.include_router(posts.router)
-app.include_router(comments.router)
-app.include_router(likes.router)
+# app.include_router(users.router)
+# app.include_router(posts.router)
+# app.include_router(comments.router)
+# app.include_router(likes.router)
 
 
 # # ----------------- MySQL Connection -----------------
