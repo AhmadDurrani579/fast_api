@@ -1,10 +1,4 @@
-# from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey, UniqueConstraint
-# from sqlalchemy.orm import relationship
-# from datetime import datetime
-# from app.db.database import Base
-
-
-from sqlalchemy import Column, Integer, String, Enum, ForeignKey
+from sqlalchemy import Column, Integer, String, Enum, ForeignKey, DateTime, Text, UniqueConstraint
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from .database import Base
@@ -29,13 +23,20 @@ class UserAccount(Base):
 
 
 
-# class UserDB(Base):
-#     __tablename__ = "user_accounts"
-#     id = Column(Integer, primary_key=True, index=True)
-#     full_name = Column(String(100), nullable=False)
-#     email = Column(String(100), unique=True, index=True, nullable=False)
-#     password = Column(String(255), nullable=False)
+class UserDB(Base):
+    __tablename__ = "user_accounts"
 
+    id = Column(Integer, primary_key=True, index=True)
+    full_name = Column(String(100), nullable=False)
+    email = Column(String(120), unique=True, index=True, nullable=False)
+    password = Column(String(255), nullable=False)
+
+    role = Column(String(20), nullable=False)  # "head" or "member"
+    family_code = Column(String(10), nullable=True)  # Only for members
+
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    
 # class PostDB(Base):
 #     __tablename__ = "posts"
 #     id = Column(Integer, primary_key=True, index=True)
