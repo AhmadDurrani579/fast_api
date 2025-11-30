@@ -32,11 +32,9 @@ jobs:
         HF_TOKEN: ${{ secrets.HF_TOKEN }}
       run: |
         set -e
-        # Remove old remote if exists
         git remote remove space 2>/dev/null || true
-        
-        # IMPORTANT: Use correct HuggingFace username AND token
-        git remote add space https://AhmadYarAI:${HF_TOKEN}@huggingface.co/spaces/AhmadYarAI/famfin-api
-        
-        # Force push to Space
+
+        # TOKEN AS USERNAME — REQUIRED BY HUGGINGFACE
+        git remote add space https://$HF_TOKEN@huggingface.co/spaces/AhmadYarAI/famfin-api
+
         git push space HEAD:main --force
