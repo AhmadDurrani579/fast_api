@@ -14,7 +14,6 @@ git clone https://github.com/AhmadDurrani579/fast_api.git
 cd <your-repo-folder>
 pip install -r requirements.txt
 
-This is a test deploy commit
 
 
 
