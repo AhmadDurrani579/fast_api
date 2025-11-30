@@ -10,26 +10,27 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v3
+      - name: Checkout code
+        uses: actions/checkout@v3
 
-    - name: Install Git LFS
-      run: |
-        sudo apt-get update
-        sudo apt-get install git-lfs
-        git lfs install
+      - name: Install Git LFS
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y git-lfs
+          git lfs install
 
-    - name: Set up HuggingFace credentials
-      env:
-        HF_TOKEN: ${{ secrets.HF_TOKEN }}
-      run: |
-        git config --global user.email "github-actions@github.com"
-        git config --global user.name "github-actions"
-        git remote add space https://huggingface.co/spaces/AhmadYarAl/famfin-api
-        git fetch space
+      - name: Configure Git
+        run: |
+          git config --global user.email "github-actions@github.com"
+          git config --global user.name "github-actions"
 
-    - name: Push to HuggingFace Space
-      env:
-        HF_TOKEN: ${{ secrets.HF_TOKEN }}
-      run: |
-        git push https://$HF_TOKEN@huggingface.co/spaces/AhmadYarAl/famfin-api HEAD:main --force
+      - name: Push to HuggingFace Space
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          echo "🔐 Configuring HuggingFace remote..."
+          git remote remove space 2>/dev/null || true
+          git remote add space https://$HF_TOKEN@huggingface.co/spaces/AhmadYarAl/famfin-api
+
+          echo "🚀 Pushing latest changes to HuggingFace..."
+          git push space HEAD:main --force
