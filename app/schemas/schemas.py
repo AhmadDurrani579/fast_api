@@ -3,10 +3,9 @@ from datetime import datetime
 from typing import Optional, List
 from enum import Enum
 
-class UserRole(str, Enum):
-    head = "head"
-    member = "member"
-
+# ------------------------
+# Signup Schemas
+# ------------------------
 
 class SignupHead(BaseModel):
     full_name: str
@@ -19,6 +18,41 @@ class SignupMember(BaseModel):
     email: EmailStr
     password: str
     family_code: str
+
+
+# ------------------------
+# Login Schema
+# ------------------------
+
+class LoginSchema(BaseModel):
+    email: EmailStr
+    password: str
+
+
+# ------------------------
+# Token Output Schema
+# ------------------------
+
+class TokenOut(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    user_id: int
+    expires_in_minutes: int
+
+
+# ------------------------
+# User Output Schema
+# ------------------------
+
+class UserOut(BaseModel):
+    id: int
+    full_name: str
+    email: EmailStr
+    family_code: Optional[str] = None
+    role: str
+
+    class Config:
+        from_attributes = True
 
     
 # # users
