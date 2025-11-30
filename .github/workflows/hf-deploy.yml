@@ -13,7 +13,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout FULL history (no shallow clone)
+    - name: Checkout FULL history
       uses: actions/checkout@v3
       with:
         fetch-depth: 0
@@ -34,15 +34,12 @@ jobs:
         HF_TOKEN: ${{ secrets.HF_TOKEN }}
       run: |
         set -e
-
-        # Enable LFS tracking
-        git lfs track "*"
-        git add .gitattributes
-        git commit -m "LFS update" || true
-
-        # Force delete and re-add remote
+      
+        # Remove existing remote
         git remote remove space 2>/dev/null || true
+
+        # Add HF remote with token authentication
         git remote add space https://AhmadYarAI:${HF_TOKEN}@huggingface.co/spaces/AhmadYarAI/famfin-api
 
-        # Push
+        # Push to HuggingFace
         git push space HEAD:main --force
