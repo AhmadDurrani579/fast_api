@@ -26,9 +26,9 @@ from fastapi import FastAPI
 from starlette.middleware.cors import CORSMiddleware
 from starlette.staticfiles import StaticFiles
 import os
-from app.db.models import Base
+
 from app.db.database import Base, engine
-from app.routers import auth, users, posts, comments, likes
+from app.routers import auth
 
 # create missing tables (won't alter existing columns)
 Base.metadata.create_all(bind=engine)
