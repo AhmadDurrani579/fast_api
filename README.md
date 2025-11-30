@@ -15,7 +15,6 @@ cd <your-repo-folder>
 pip install -r requirements.txt
 
 This is a test deploy commit
-Update Readme file
 
 
 
