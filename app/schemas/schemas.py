@@ -33,11 +33,11 @@ class LoginSchema(BaseModel):
 # Token Output Schema
 # ------------------------
 
-class TokenOut(BaseModel):
-    access_token: str
-    token_type: str = "bearer"
-    user_id: int
-    expires_in_minutes: int
+# class TokenOut(BaseModel):
+#     access_token: str
+#     token_type: str = "bearer"
+#     user_id: int
+#     expires_in_minutes: int
 
 
 # ------------------------
