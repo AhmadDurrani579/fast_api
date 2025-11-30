@@ -33,8 +33,5 @@ jobs:
       run: |
         set -e
         git remote remove space 2>/dev/null || true
-
-        # TOKEN AS USERNAME — REQUIRED BY HUGGINGFACE
         git remote add space https://$HF_TOKEN@huggingface.co/spaces/AhmadYarAI/famfin-api
-
         git push space HEAD:main --force
