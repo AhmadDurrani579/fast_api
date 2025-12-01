@@ -4,8 +4,8 @@ import random, string
 
 from app.db.database import get_db
 from app.db.models import UserDB
-from app.schemas.schemas import SignupHead, SignupMember
-from app.core.security import hash_password, create_access_token
+from app.schemas.schemas import SignupHead, SignupMember, LoginSchema
+from app.core.security import hash_password, create_access_token, verify_password
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
 
@@ -87,6 +87,36 @@ def signup_member(payload: SignupMember, db: Session = Depends(get_db)):
         "token": token,
         "user": {
             "id": user.id,
+            "email": user.email,
+            "role": user.role,
+            "family_code": user.family_code
+        }
+    }
+
+@router.post("/login")
+def login(payload: LoginSchema, db: Session = Depends(get_db)):
+    # Find user by email
+    user = db.query(UserDB).filter(UserDB.email == payload.email).first()
+
+    if not user:
+        raise HTTPException(status_code=400, detail="Invalid email or password")
+
+    # Verify password
+    if not verify_password(payload.password, user.password):
+        raise HTTPException(status_code=400, detail="Invalid email or password")
+
+    # Create JWT token
+    token = create_access_token(
+        {"id": user.id, "email": user.email, "role": user.role}
+    )
+
+    return {
+        "status": True,
+        "message": "Login successful",
+        "token": token,
+        "user": {
+            "id": user.id,
+            "full_name": user.full_name,
             "email": user.email,
             "role": user.role,
             "family_code": user.family_code
