@@ -137,9 +137,7 @@ def send_code(payload: SendCodeRequest, db: Session = Depends(get_db)):
     # 3. Send the OTP by email
     subject = "Your FamFin Verification Code"
     body = f"Your verification code is: {otp}"
-
-    send_email(payload.email, subject, body)
-
+    send_email(payload.email, "Your OTP Code", f"Your OTP is {otp}")
     # 4. Return success message (do NOT return OTP)
     return {
         "status": True,
