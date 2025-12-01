@@ -54,6 +54,9 @@ class UserOut(BaseModel):
     class Config:
         from_attributes = True
 
+
+class EditProfile(BaseModel):
+    full_name: str
     
 # # users
 # class UserSignup(BaseModel):

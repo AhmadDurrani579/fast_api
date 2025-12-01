@@ -1,34 +1,10 @@
-# from fastapi import FastAPI, Depends, HTTPException
-# from pydantic import BaseModel, EmailStr, ConfigDict
-# from sqlalchemy import create_engine, Column, Integer, String, UniqueConstraint
-# from sqlalchemy.orm import sessionmaker, declarative_base, Session
-# import bcrypt
-# from starlette.middleware.cors import CORSMiddleware
-# from sqlalchemy import ForeignKey, DateTime, Text, func
-# from sqlalchemy.orm import relationship
-# from datetime import datetime
-
-# import os, uuid
-# from typing import Optional, List
-# from fastapi import File, UploadFile, Form
-# from starlette.staticfiles import StaticFiles
-# from pydantic import BaseModel as PModel
-# from typing import Optional, List
-# from sqlalchemy.orm import selectinload
-# from fastapi import Depends, APIRouter
-# from sqlalchemy.orm import Session, selectinload
-# from sqlalchemy.orm import selectinload
-# from sqlalchemy import func
-# from sqlalchemy.exc import IntegrityError
-
-
 from fastapi import FastAPI
 from starlette.middleware.cors import CORSMiddleware
 from starlette.staticfiles import StaticFiles
 import os
-
 from app.db.database import Base, engine
 from app.routers import auth
+from app.routers import profile
 
 # create missing tables (won't alter existing columns)
 Base.metadata.create_all(bind=engine)
@@ -55,6 +31,7 @@ def root():
 
 # include routers
 app.include_router(auth.router)
+app.include_router(profile.router)
 # app.include_router(users.router)
 # app.include_router(posts.router)
 # app.include_router(comments.router)
