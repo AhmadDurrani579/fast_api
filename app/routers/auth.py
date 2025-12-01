@@ -155,7 +155,7 @@ from fastapi import HTTPException, Depends
 from sqlalchemy.orm import Session
 
 @router.post("/verify-code")
-def verify_code(payload: VerifyCodeRequest, db: Session = Depends(get_db)):
+def verify_code(payload: VerifyOTPRequest, db: Session = Depends(get_db)):
     user = db.query(UserDB).filter(UserDB.email == payload.email).first()
     if not user:
         raise HTTPException(status_code=404, detail="Email not found")
@@ -164,11 +164,11 @@ def verify_code(payload: VerifyCodeRequest, db: Session = Depends(get_db)):
     if not user.otp_code or not user.otp_expiry:
         raise HTTPException(status_code=400, detail="No OTP sent. Please request again.")
 
-    # 2. OTP expired? (use timezone-aware comparison)
+    # 2. OTP expired (timezone-aware)
     if user.otp_expiry < datetime.now(timezone.utc):
         raise HTTPException(status_code=400, detail="OTP expired. Request a new one.")
 
-    # 3. Wrong OTP?
+    # 3. Wrong OTP
     if user.otp_code != payload.otp:
         raise HTTPException(status_code=400, detail="Incorrect OTP")
 
