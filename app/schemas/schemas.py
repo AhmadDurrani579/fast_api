@@ -32,6 +32,10 @@ class SendCodeRequest(BaseModel):
     email: EmailStr
 
 
+class VerifyOTPRequest(BaseModel):
+    email: EmailStr
+    otp: str
+
 # ------------------------
 # Token Output Schema
 # ------------------------
