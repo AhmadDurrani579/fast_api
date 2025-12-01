@@ -150,31 +150,31 @@ def send_code(payload: SendCodeRequest, db: Session = Depends(get_db)):
         "message": "Verification code sent to email."
     }
 
+from datetime import datetime, timedelta, timezone
+from fastapi import HTTPException, Depends
+from sqlalchemy.orm import Session
+
 @router.post("/verify-code")
-def verify_code(payload: VerifyOTPRequest, db: Session = Depends(get_db)):
-
+def verify_code(payload: VerifyCodeRequest, db: Session = Depends(get_db)):
     user = db.query(UserDB).filter(UserDB.email == payload.email).first()
-
     if not user:
-        raise HTTPException(status_code=404, detail="User not found")
+        raise HTTPException(status_code=404, detail="Email not found")
 
-    if not user.otp_code:
+    # 1. No OTP sent
+    if not user.otp_code or not user.otp_expiry:
         raise HTTPException(status_code=400, detail="No OTP sent. Please request again.")
 
-    # CHECK OTP
+    # 2. OTP expired? (use timezone-aware comparison)
+    if user.otp_expiry < datetime.now(timezone.utc):
+        raise HTTPException(status_code=400, detail="OTP expired. Request a new one.")
+
+    # 3. Wrong OTP?
     if user.otp_code != payload.otp:
-        raise HTTPException(status_code=400, detail="Invalid OTP")
+        raise HTTPException(status_code=400, detail="Incorrect OTP")
 
-    # CHECK EXPIRY
-    if user.otp_expiry < datetime.utcnow():
-        raise HTTPException(status_code=400, detail="OTP expired")
-
-    # SUCCESS — CLEAR OTP
+    # 4. OTP is correct → clear it
     user.otp_code = None
     user.otp_expiry = None
     db.commit()
 
-    return {
-        "status": True,
-        "message": "OTP verified successfully"
-    }
+    return {"status": True, "message": "OTP verified successfully"}
