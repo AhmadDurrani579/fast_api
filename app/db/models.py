@@ -10,19 +10,6 @@ class UserRole(enum.Enum):
     member = "member"
 
 
-# class UserAccount(Base):
-#     __tablename__ = "user_accounts"
-#     id = Column(Integer, primary_key=True, index=True)
-#     full_name = Column(String(100), nullable=False)
-#     email = Column(String(120), unique=True, index=True, nullable=False)
-#     password = Column(String(255), nullable=False)
-#     role = Column(Enum(UserRole), nullable=False)   # "head" or "member"
-#     family_code = Column(String(10), index=True)    # Head gets code, members use it
-#     family_id = Column(Integer, index=True)         # Same family group ID
-#     created_at = Column(String, server_default=func.now())
-
-
-
 class UserDB(Base):
     __tablename__ = "user_accounts"
 
