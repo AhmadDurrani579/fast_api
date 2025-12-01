@@ -7,6 +7,7 @@ from app.db.models import UserDB
 from app.schemas.schemas import SignupHead, SignupMember, LoginSchema, SendCodeRequest, VerifyOTPRequest
 from app.core.security import hash_password, create_access_token, verify_password, generate_otp
 from app.utils.email_utils import send_email
+from datetime import datetime, timedelta
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
 
@@ -135,10 +136,15 @@ def send_code(payload: SendCodeRequest, db: Session = Depends(get_db)):
     otp = generate_otp()
 
     # 3. Send the OTP by email
-    subject = "Your FamFin Verification Code"
-    body = f"Your verification code is: {otp}"
     send_email(payload.email, "Your OTP Code", f"Your OTP is {otp}")
-    # 4. Return success message (do NOT return OTP)
+
+    # 4. Save OTP + expiry in database (THIS PART WAS MISSING)
+    user.otp_code = otp
+    user.otp_expiry = datetime.utcnow() + timedelta(minutes=10)
+    db.commit()
+    db.refresh(user)
+
+    # 5. Return success message
     return {
         "status": True,
         "message": "Verification code sent to email."
