@@ -20,9 +20,9 @@ class UserDB(Base):
 
     role = Column(String(20), nullable=False)  # "head" or "member"
     family_code = Column(String(10), nullable=True)  # Only for members
-
+    otp_code = Column(String(6), nullable=True)
+    otp_expiry = Column(DateTime, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
-
 
 # class PostDB(Base):
 #     __tablename__ = "posts"

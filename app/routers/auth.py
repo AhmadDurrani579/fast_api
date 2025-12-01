@@ -4,8 +4,9 @@ import random, string
 
 from app.db.database import get_db
 from app.db.models import UserDB
-from app.schemas.schemas import SignupHead, SignupMember, LoginSchema
-from app.core.security import hash_password, create_access_token, verify_password
+from app.schemas.schemas import SignupHead, SignupMember, LoginSchema, SendCodeRequest
+from app.core.security import hash_password, create_access_token, verify_password, generate_otp
+from app.utils.email_utils import send_email
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
 
@@ -121,4 +122,26 @@ def login(payload: LoginSchema, db: Session = Depends(get_db)):
             "role": user.role,
             "family_code": user.family_code
         }
+    }
+
+@router.post("/send-code")
+def send_code(payload: SendCodeRequest, db: Session = Depends(get_db)):
+    # 1. Check if email exists
+    user = db.query(UserDB).filter(UserDB.email == payload.email).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="Email not found")
+
+    # 2. Generate OTP
+    otp = generate_otp()
+
+    # 3. Send the OTP by email
+    subject = "Your FamFin Verification Code"
+    body = f"Your verification code is: {otp}"
+
+    send_email(payload.email, subject, body)
+
+    # 4. Return success message (do NOT return OTP)
+    return {
+        "status": True,
+        "message": "Verification code sent to email."
     }

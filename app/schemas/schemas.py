@@ -28,6 +28,9 @@ class LoginSchema(BaseModel):
     email: EmailStr
     password: str
 
+class SendCodeRequest(BaseModel):
+    email: EmailStr
+
 
 # ------------------------
 # Token Output Schema
@@ -57,7 +60,7 @@ class UserOut(BaseModel):
 
 class EditProfile(BaseModel):
     full_name: str
-    
+
 # # users
 # class UserSignup(BaseModel):
 #     full_name: str

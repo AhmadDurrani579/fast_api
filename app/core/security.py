@@ -3,11 +3,17 @@ from datetime import datetime, timedelta
 from jose import jwt
 from passlib.context import CryptContext
 from app.core.config import settings
+import random
 
 pwd_context = CryptContext(
     schemes=["bcrypt_sha256"],
     deprecated="auto"
 )
+
+
+def generate_otp():
+    return str(random.randint(100000, 999999))
+
 def hash_password(p: str) -> str:
     return pwd_context.hash(p)
 
