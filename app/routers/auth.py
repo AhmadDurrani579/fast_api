@@ -4,7 +4,7 @@ import random, string
 
 from app.db.database import get_db
 from app.db.models import UserDB
-from app.schemas.schemas import SignupHead, SignupMember, LoginSchema, SendCodeRequest, VerifyOTPRequest
+from app.schemas.schemas import SignupHead, SignupMember, LoginSchema, SendCodeRequest, VerifyOTPRequest, ResetPasswordRequest
 from app.core.security import hash_password, create_access_token, verify_password, generate_otp
 from app.utils.email_utils import send_email
 from datetime import datetime, timedelta
@@ -178,3 +178,28 @@ def verify_code(payload: VerifyOTPRequest, db: Session = Depends(get_db)):
     db.commit()
 
     return {"status": True, "message": "OTP verified successfully"}
+
+
+@router.post("/reset-password")
+def reset_password(payload: ResetPasswordRequest, db: Session = Depends(get_db)):
+    user = db.query(UserDB).filter(UserDB.email == payload.email).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="Email not found")
+
+    # Require OTP verification first
+    if user.otp_code is not None:
+        raise HTTPException(status_code=400, detail="OTP not verified yet")
+
+    # Update password
+    user.password = hash_password(payload.new_password)
+
+    # Clear OTP fields just in case
+    user.otp_code = None
+    user.otp_expiry = None
+
+    db.commit()
+
+    return {
+        "status": True,
+        "message": "Password reset successfully"
+    }
