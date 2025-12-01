@@ -15,7 +15,6 @@ router = APIRouter(prefix="/auth", tags=["Auth"])
 def generate_family_code():
     return ''.join(random.choices(string.ascii_uppercase + string.digits, k=6))
  
-
 @router.post("/signup/head")
 def signup_head(payload: SignupHead, db: Session = Depends(get_db)):
     existing = db.query(UserDB).filter(UserDB.email == payload.email).first()
