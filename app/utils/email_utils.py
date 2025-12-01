@@ -5,7 +5,7 @@ from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent.parent.parent 
 DOTENV_PATH = BASE_DIR / ".env"
-
+ 
 # Load the .env file from the root directory
 load_dotenv(dotenv_path=DOTENV_PATH) 
 
