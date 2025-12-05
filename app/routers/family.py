@@ -6,7 +6,7 @@ from app.db.database import get_db
 from app.db.models import UserDB
 from app.db.models_family import Family, FamilyMember
 from app.deps.deps import get_current_user
-from app.schemas.schemas import FamilySetupRequest
+from app.schemas.schemas import FamilySetupRequest, UpdateFamilyMemberRequest
 
 router = APIRouter(prefix="/family", tags=["family"])
 
@@ -124,11 +124,13 @@ def get_family_summary(
         .all()
     )
 
-    # Build member summary list
+    # Build member summary list with ID + role
     member_data = []
     for m in members:
         member_data.append({
+            "id": m.id,
             "name": m.name,
+            "role": m.role,
             "allocated": m.allocated_budget,
             "spent": m.spent_amount,
             "remaining": m.allocated_budget - m.spent_amount
@@ -187,4 +189,78 @@ def add_member(
             "name": new_member.name,
             "allocated_budget": new_member.allocated_budget
         }
+    }
+
+@router.post("/update-member")
+def update_member(
+    payload: UpdateFamilyMemberRequest,
+    current_user: UserDB = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    # Only head can update members
+    if current_user.role != "head":
+        raise HTTPException(
+            status_code=403,
+            detail="Only family head can update members"
+        )
+
+    # Find family of head
+    family = db.query(Family).filter(Family.head_id == current_user.id).first()
+    if not family:
+        raise HTTPException(status_code=404, detail="Family not found")
+
+    # ============================
+    # 1️⃣ Find member (BY ID first)
+    # ============================
+    member = None
+
+    if payload.member_id is not None:
+        member = (
+            db.query(FamilyMember)
+            .filter(
+                FamilyMember.id == payload.member_id,
+                FamilyMember.family_code == family.family_code
+            )
+            .first()
+        )
+
+    # ============================
+    # 2️⃣ If ID not found → find by NAME
+    # ============================
+    if member is None and payload.name is not None:
+        member = (
+            db.query(FamilyMember)
+            .filter(
+                FamilyMember.name == payload.name,
+                FamilyMember.family_code == family.family_code
+            )
+            .first()
+        )
+
+    if not member:
+        raise HTTPException(status_code=404, detail="Family member not found")
+
+    # ============================
+    # 3️⃣ Apply updates
+    # ============================
+    if payload.allocated_budget is not None:
+        member.allocated_budget = payload.allocated_budget
+
+    if payload.role is not None:
+        member.role = payload.role
+
+    db.commit()
+    db.refresh(member)
+
+    return {
+        "status": True,
+        "message": "Family member updated",
+        "member": {
+            "id": member.id,
+            "name": member.name,
+            "role": member.role,
+            "allocated": member.allocated_budget,
+            "spent": member.spent_amount,
+            "remaining": member.allocated_budget - member.spent_amount,
+        },
     }

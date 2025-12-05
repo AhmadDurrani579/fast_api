@@ -27,12 +27,15 @@ class FamilyMember(Base):
     family_code = Column(String(10), index=True, nullable=False)
     name = Column(String(100), nullable=False)
 
-    # 🔗 Link to the actual user account (optional, set when member signs up)
-    user_id = Column(Integer, ForeignKey("user_accounts.id"), nullable=True)
-
-    role = Column(String(20), nullable=False, default="member")
+    # allow null/empty so head can set later
+    role = Column(String(20), nullable=True)  # e.g. "head", "wife", "son", etc.
 
     allocated_budget = Column(Float, default=0.0)
     spent_amount = Column(Float, default=0.0)
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    family = relationship(
+        "Family",
+        primaryjoin="Family.family_code==foreign(FamilyMember.family_code)"
+    )

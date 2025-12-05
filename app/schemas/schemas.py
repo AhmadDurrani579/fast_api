@@ -59,8 +59,12 @@ class FamilySetupRequest(BaseModel):
     total_balance: float
     total_income: float
     members: List[str]
-    
-        
+
+class UpdateFamilyMemberRequest(BaseModel):
+    member_id: Optional[int] = None
+    name: Optional[str] = None     # used only when member_id is missing
+    allocated_budget: Optional[float] = None
+    role: Optional[str] = None
 # ------------------------
 # Token Output Schema
 # ------------------------
