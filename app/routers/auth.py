@@ -54,6 +54,7 @@ def signup_head(payload: SignupHead, db: Session = Depends(get_db)):
 
 @router.post("/signup/member")
 def signup_member(payload: SignupMember, db: Session = Depends(get_db)):
+    # 1) Check family head exists with that family_code
     head = db.query(UserDB).filter(
         UserDB.family_code == payload.family_code,
         UserDB.role == "head"
@@ -62,10 +63,12 @@ def signup_member(payload: SignupMember, db: Session = Depends(get_db)):
     if not head:
         raise HTTPException(status_code=400, detail="Invalid family code.")
 
+    # 2) Check email not already used
     existing = db.query(UserDB).filter(UserDB.email == payload.email).first()
     if existing:
         raise HTTPException(status_code=400, detail="Email already registered.")
 
+    # 3) Create the user as member
     user = UserDB(
         full_name=payload.full_name,
         email=payload.email,
@@ -78,6 +81,20 @@ def signup_member(payload: SignupMember, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(user)
 
+    # 4) 🔗 Try to connect this account to a FamilyMember row
+    from app.db.models_family import FamilyMember  # local import to avoid cycles
+
+    member_row = db.query(FamilyMember).filter(
+        FamilyMember.family_code == payload.family_code,
+        FamilyMember.name == payload.full_name  # match by name
+    ).first()
+
+    if member_row:
+        member_row.user_id = user.id
+        db.commit()
+        db.refresh(member_row)
+
+    # 5) Issue token
     token = create_access_token(
         {"id": user.id, "email": user.email, "role": user.role}
     )
@@ -85,14 +102,16 @@ def signup_member(payload: SignupMember, db: Session = Depends(get_db)):
     return {
         "status": True,
         "message": "Family Member signup successful",
-        "token": token,
         "user": {
             "id": user.id,
             "email": user.email,
+            "full_name": user.full_name,
             "role": user.role,
             "family_code": user.family_code
-        }
+        },
+        "token": token
     }
+
 
 @router.post("/login")
 def login(payload: LoginSchema, db: Session = Depends(get_db)):
