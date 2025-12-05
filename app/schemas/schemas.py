@@ -55,7 +55,12 @@ class FamilySummary(BaseModel):
     remaining_budget: float
     family_members: list[FamilySummaryMember]
 
+class FamilySetupRequest(BaseModel):
+    total_balance: float
+    total_income: float
+    members: List[str]
     
+        
 # ------------------------
 # Token Output Schema
 # ------------------------

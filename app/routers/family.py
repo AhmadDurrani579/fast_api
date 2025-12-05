@@ -6,6 +6,7 @@ from app.db.database import get_db
 from app.db.models import UserDB
 from app.db.models_family import Family, FamilyMember
 from app.deps.deps import get_current_user
+from app.schemas.schemas import FamilySetupRequest
 
 router = APIRouter(prefix="/family", tags=["family"])
 
@@ -15,18 +16,15 @@ router = APIRouter(prefix="/family", tags=["family"])
 # -------------------------------------------------
 @router.post("/setup")
 def family_setup(
-    total_balance: float,
-    total_income: float,
-    members: List[str],
+    payload: FamilySetupRequest,
     current_user: UserDB = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-
-    # Only head user can create
+    # Only head can create
     if current_user.role != "head":
         raise HTTPException(status_code=403, detail="Only family head can create family")
 
-    # Check if already has a family
+    # Check if already created
     existing = db.query(Family).filter(Family.head_id == current_user.id).first()
     if existing:
         raise HTTPException(status_code=400, detail="Family already created")
@@ -35,24 +33,22 @@ def family_setup(
     fam = Family(
         family_code=current_user.family_code,
         head_id=current_user.id,
-        total_balance=total_balance,
-        total_income=total_income,
-        expected_members=",".join(members)
+        total_balance=payload.total_balance,
+        total_income=payload.total_income,
+        expected_members=",".join(payload.members),
     )
     db.add(fam)
     db.commit()
     db.refresh(fam)
 
-    # ---------------------------------------
-    # INSERT MEMBERS INTO family_members TABLE
-    # ---------------------------------------
-    for m in members:
+    # ✅ INSERT MEMBERS INTO family_members TABLE
+    for name in payload.members:
         member_row = FamilyMember(
             family_code=current_user.family_code,
-            name=m,
-            role="member",
-            allocated_budget=0.0,
-            spent_amount=0.0
+            name=name,
+            role="member",          # or "", doesn’t matter for now
+            allocated_budget=0.0,   # starts at 0; you will update later
+            spent_amount=0.0,
         )
         db.add(member_row)
 
@@ -63,12 +59,11 @@ def family_setup(
         "message": "Family profile created successfully",
         "family": {
             "family_code": fam.family_code,
-            "members": members,
+            "members": payload.members,
             "total_balance": fam.total_balance,
-            "total_income": fam.total_income
-        }
+            "total_income": fam.total_income,
+        },
     }
-
 # -------------------------------------------------
 # 2. Get Family Info
 # -------------------------------------------------
