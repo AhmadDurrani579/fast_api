@@ -22,16 +22,16 @@ def family_setup(
     db: Session = Depends(get_db)
 ):
 
-    # Only head can create
+    # Only head user can create
     if current_user.role != "head":
         raise HTTPException(status_code=403, detail="Only family head can create family")
 
-    # Check if already created
+    # Check if already has a family
     existing = db.query(Family).filter(Family.head_id == current_user.id).first()
     if existing:
         raise HTTPException(status_code=400, detail="Family already created")
 
-    # Create family record
+    # Create main family record
     fam = Family(
         family_code=current_user.family_code,
         head_id=current_user.id,
@@ -39,23 +39,22 @@ def family_setup(
         total_income=total_income,
         expected_members=",".join(members)
     )
-
     db.add(fam)
     db.commit()
     db.refresh(fam)
 
-    # -------------------------------------------------
-    # AUTO-CREATE FamilyMember rows (allocated_budget = 0, spent = 0)
-    # -------------------------------------------------
-    for name in members:
-        member = FamilyMember(
+    # ---------------------------------------
+    # INSERT MEMBERS INTO family_members TABLE
+    # ---------------------------------------
+    for m in members:
+        member_row = FamilyMember(
             family_code=current_user.family_code,
-            name=name,
+            name=m,
             role="member",
             allocated_budget=0.0,
             spent_amount=0.0
         )
-        db.add(member)
+        db.add(member_row)
 
     db.commit()
 
@@ -69,7 +68,6 @@ def family_setup(
             "total_income": fam.total_income
         }
     }
-
 
 # -------------------------------------------------
 # 2. Get Family Info
