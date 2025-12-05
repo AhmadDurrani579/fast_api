@@ -29,14 +29,9 @@ class FamilyMember(Base):
     __tablename__ = "family_members"
 
     id = Column(Integer, primary_key=True, index=True)
-
-    family_code = Column(String(10), index=True, nullable=False)  # 🔴 key field
+    family_code = Column(String(10), index=True, nullable=False)
     name = Column(String(100), nullable=False)
-    role = Column(String(20), nullable=False)  # e.g. "head", "wife", "son", etc.
-
+    role = Column(String(20), nullable=False)
     allocated_budget = Column(Float, default=0.0)
     spent_amount = Column(Float, default=0.0)
-
     created_at = Column(DateTime(timezone=True), server_default=func.now())
-
-    family = relationship("Family", primaryjoin="Family.family_code==foreign(FamilyMember.family_code)")
