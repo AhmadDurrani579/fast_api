@@ -23,7 +23,8 @@ class UserDB(Base):
     otp_code = Column(String(6), nullable=True)
     otp_expiry = Column(DateTime, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
-
+    family = relationship("Family", back_populates="head", uselist=False)
+    
 # class PostDB(Base):
 #     __tablename__ = "posts"
 #     id = Column(Integer, primary_key=True, index=True)
