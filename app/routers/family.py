@@ -1,31 +1,36 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
+from typing import List
 
 from app.db.database import get_db
 from app.db.models import UserDB
 from app.db.models_family import Family, FamilyMember
 from app.deps.deps import get_current_user
 from app.schemas.schemas import FamilySummaryMember, FamilySummary
+
 router = APIRouter(prefix="/family", tags=["family"])
+
 
 # -------------------------------------------------
 # 1. Family Setup API (HEAD ONLY)
 # -------------------------------------------------
 @router.post("/setup")
-def family_setup(total_balance: float,
-                 total_income: float,
-                 members: list[str],
-                 current_user: UserDB = Depends(get_current_user),
-                 db: Session = Depends(get_db)):
+def family_setup(
+    total_balance: float,
+    total_income: float,
+    members: List[str],
+    current_user: UserDB = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
 
     # Only head can create
     if current_user.role != "head":
-        raise HTTPException(403, "Only family head can create family")
+        raise HTTPException(status_code=403, detail="Only family head can create family")
 
     # Check if already created
     existing = db.query(Family).filter(Family.head_id == current_user.id).first()
     if existing:
-        raise HTTPException(400, "Family already created")
+        raise HTTPException(status_code=400, detail="Family already created")
 
     fam = Family(
         family_code=current_user.family_code,
@@ -50,17 +55,24 @@ def family_setup(total_balance: float,
         }
     }
 
+
 # -------------------------------------------------
 # 2. Get Family Info
 # -------------------------------------------------
 @router.get("/info")
-def get_family(current_user: UserDB = Depends(get_current_user),
-               db: Session = Depends(get_db)):
+def get_family(
+    current_user: UserDB = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
 
-    fam = db.query(Family).filter(Family.family_code == current_user.family_code).first()
+    fam = (
+        db.query(Family)
+        .filter(Family.family_code == current_user.family_code)
+        .first()
+    )
 
     if not fam:
-        raise HTTPException(404, "Family not found")
+        raise HTTPException(status_code=404, detail="Family not found")
 
     return {
         "status": True,
@@ -74,25 +86,35 @@ def get_family(current_user: UserDB = Depends(get_current_user),
         }
     }
 
+
+# -------------------------------------------------
+# 3. Dashboard Summary
+# -------------------------------------------------
 @router.get("/summary")
-def get_family_summary(current_user: UserDB = Depends(get_current_user),
-                       db: Session = Depends(get_db)):
-    
-    # Get the family record
-    family = db.query(Family).filter(
-        (Family.head_id == current_user.id) |
-        (Family.family_code == current_user.family_code)
-    ).first()
+def get_family_summary(
+    current_user: UserDB = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    # Find family by head or by family_code (for members)
+    family = (
+        db.query(Family)
+        .filter(
+            (Family.head_id == current_user.id)
+            | (Family.family_code == current_user.family_code)
+        )
+        .first()
+    )
 
     if not family:
-        raise HTTPException(404, "Family not found")
+        raise HTTPException(status_code=404, detail="Family not found")
 
-    # Get members
-    members = db.query(FamilyMember).filter(
-        FamilyMember.family_code == family.family_code
-    ).all()
+    # Get all members in that family_code
+    members = (
+        db.query(FamilyMember)
+        .filter(FamilyMember.family_code == family.family_code)
+        .all()
+    )
 
-    # Calculate totals
     total_expenses = sum(m.spent_amount for m in members)
     remaining_budget = family.total_income - total_expenses
 
