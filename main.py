@@ -6,6 +6,7 @@ from app.db.database import Base, engine
 from app.routers import auth
 from app.routers import profile
 from app.routers import users
+from app.routers import family
 
 # create missing tables (won't alter existing columns)
 Base.metadata.create_all(bind=engine)
@@ -34,6 +35,7 @@ def root():
 app.include_router(auth.router)
 app.include_router(profile.router)
 app.include_router(users.router)
+app.include_router(family.router)
 
 # app.include_router(users.router)
 # app.include_router(posts.router)
