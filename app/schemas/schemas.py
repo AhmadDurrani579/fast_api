@@ -40,6 +40,22 @@ class ResetPasswordRequest(BaseModel):
     email: EmailStr
     new_password: str
 
+
+class FamilySummaryMember(BaseModel):
+    name: str
+    role: str
+    allocated_budget: float
+    spent_amount: float
+    remaining: float
+
+class FamilySummary(BaseModel):
+    total_balance: float
+    total_income: float
+    total_expenses: float
+    remaining_budget: float
+    family_members: list[FamilySummaryMember]
+
+    
 # ------------------------
 # Token Output Schema
 # ------------------------

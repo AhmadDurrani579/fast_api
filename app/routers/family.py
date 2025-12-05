@@ -5,7 +5,8 @@ from app.db.database import get_db
 from app.db.models import UserDB
 from app.db.models_family import Family
 from app.deps.deps import get_current_user
-
+from app.routers.family import FamilyMember
+from app.schemas.schemas import FamilySummaryMember, FamilySummary
 router = APIRouter(prefix="/family", tags=["family"])
 
 # -------------------------------------------------
@@ -72,4 +73,46 @@ def get_family(current_user: UserDB = Depends(get_current_user),
             "total_income": fam.total_income,
             "expected_members": fam.expected_members.split(",") if fam.expected_members else []
         }
+    }
+
+@router.get("/summary")
+def get_family_summary(current_user: UserDB = Depends(get_current_user),
+                       db: Session = Depends(get_db)):
+    
+    # Get the family record
+    family = db.query(Family).filter(
+        (Family.head_id == current_user.id) |
+        (Family.family_code == current_user.family_code)
+    ).first()
+
+    if not family:
+        raise HTTPException(404, "Family not found")
+
+    # Get members
+    members = db.query(FamilyMember).filter(
+        FamilyMember.family_code == family.family_code
+    ).all()
+
+    # Calculate totals
+    total_expenses = sum(m.spent_amount for m in members)
+    remaining_budget = family.total_income - total_expenses
+
+    family_data = []
+    for m in members:
+        family_data.append({
+            "name": m.name,
+            "role": m.role,
+            "allocated": m.allocated_budget,
+            "spent": m.spent_amount,
+            "remaining": m.allocated_budget - m.spent_amount
+        })
+
+    return {
+        "status": True,
+        "message": "Dashboard loaded",
+        "total_balance": family.total_balance,
+        "total_income": family.total_income,
+        "total_expenses": total_expenses,
+        "remaining_budget": remaining_budget,
+        "family_members": family_data
     }
