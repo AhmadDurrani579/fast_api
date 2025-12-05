@@ -3,9 +3,8 @@ from sqlalchemy.orm import Session
 
 from app.db.database import get_db
 from app.db.models import UserDB
-from app.db.models_family import Family
+from app.db.models_family import Family, FamilyMember
 from app.deps.deps import get_current_user
-from app.routers.family import FamilyMember
 from app.schemas.schemas import FamilySummaryMember, FamilySummary
 router = APIRouter(prefix="/family", tags=["family"])
 
