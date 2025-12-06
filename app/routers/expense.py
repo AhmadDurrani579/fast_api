@@ -36,7 +36,7 @@ def add_expense(
     current_user: UserDB = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    # Get family via user
+    # Load family
     family = db.query(Family).filter(
         Family.family_code == current_user.family_code
     ).first()
@@ -44,20 +44,20 @@ def add_expense(
     if not family:
         raise HTTPException(404, "Family not found")
 
-    # --- CATEGORY VALIDATION ---
+    # --- Validate category ---
     allowed_categories = [c["name"] for c in CATEGORIES]
     if payload.category not in allowed_categories:
         raise HTTPException(400, "Invalid category")
 
-    # --- AMOUNT VALIDATION ---
+    # --- Validate amount ---
     if payload.amount <= 0:
         raise HTTPException(400, "Amount must be greater than 0")
 
-    member_id = None
+    member_id = None  # default case = head personal expense
 
-    # -----------------------------
-    # CASE 1: MEMBER ADDING EXPENSE
-    # -----------------------------
+    # --------------------------------------------------------------------
+    # CASE 1: MEMBER adding expense (never allowed to choose member_id)
+    # --------------------------------------------------------------------
     if current_user.role == "member":
         fm = db.query(FamilyMember).filter(
             FamilyMember.family_code == family.family_code,
@@ -67,26 +67,32 @@ def add_expense(
         if not fm:
             raise HTTPException(400, "Member record not found")
 
-        member_id = fm.id  # Member can ONLY add for themselves
+        member_id = fm.id   # locked to this user only
 
-    # -----------------------------
-    # CASE 2: HEAD ASSIGNING EXPENSE
-    # -----------------------------
-    if current_user.role == "head" and payload.member_id is not None:
+    # --------------------------------------------------------------------
+    # CASE 2: HEAD adding an expense
+    # --------------------------------------------------------------------
+    elif current_user.role == "head":
 
-        member_exists = db.query(FamilyMember).filter(
-            FamilyMember.id == payload.member_id,
-            FamilyMember.family_code == family.family_code
-        ).first()
+        # If head DID NOT send member_id → head’s own expense
+        if payload.member_id is None:
+            member_id = None
 
-        if not member_exists:
-            raise HTTPException(404, "Member not found in this family")
+        else:
+            # Validate chosen member belongs to family
+            chosen = db.query(FamilyMember).filter(
+                FamilyMember.id == payload.member_id,
+                FamilyMember.family_code == family.family_code
+            ).first()
 
-        member_id = payload.member_id
+            if not chosen:
+                raise HTTPException(404, "Member not found in this family")
 
-    # -----------------------------
+            member_id = chosen.id
+
+    # --------------------------------------------------------------------
     # CREATE EXPENSE
-    # -----------------------------
+    # --------------------------------------------------------------------
     exp = ExpenseDB(
         family_code=family.family_code,
         member_id=member_id,
