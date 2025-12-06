@@ -116,3 +116,65 @@ def add_expense(
             "member_id": exp.member_id
         }
     }
+
+
+@router.get("/list")
+def list_expenses(
+    current_user: UserDB = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    # Get family via current user
+    family = db.query(Family).filter(
+        Family.family_code == current_user.family_code
+    ).first()
+
+    if not family:
+        raise HTTPException(404, "Family not found")
+
+    # If member → show only their expenses
+    if current_user.role == "member":
+        member = db.query(FamilyMember).filter(
+            FamilyMember.user_id == current_user.id,
+            FamilyMember.family_code == family.family_code
+        ).first()
+
+        if not member:
+            raise HTTPException(400, "Member record not found")
+
+        expenses = db.query(ExpenseDB).filter(
+            ExpenseDB.member_id == member.id
+        ).all()
+
+    # If head → show all expenses
+    else:
+        expenses = db.query(ExpenseDB).filter(
+            ExpenseDB.family_code == family.family_code
+        ).all()
+
+    # Convert results
+    response_list = []
+    for exp in expenses:
+        # Find member name (if exists)
+        member_name = None
+        if exp.member_id:
+            mem = db.query(FamilyMember).filter(
+                FamilyMember.id == exp.member_id
+            ).first()
+            if mem:
+                member_name = mem.name
+
+        response_list.append({
+            "id": exp.id,
+            "name": exp.name,
+            "category": exp.category,
+            "amount": exp.amount,
+            "member_id": exp.member_id,
+            "member_name": member_name,
+            "created_at": exp.created_at,
+        })
+
+    return {
+        "status": True,
+        "message": "Expenses loaded",
+        "expenses": response_list
+    }
