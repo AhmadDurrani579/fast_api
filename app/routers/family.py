@@ -128,14 +128,14 @@ def get_family_summary(
     member_data = []
     for m in members:
         member_data.append({
-            "id": m.id,
+            "member_id": m.id,      # always exists
+            "user_id": m.user_id,   # real user, null if dummy
             "name": m.name,
             "role": m.role,
             "allocated": m.allocated_budget,
             "spent": m.spent_amount,
             "remaining": m.allocated_budget - m.spent_amount
         })
-
     total_expenses = sum(m.spent_amount for m in members)
     remaining_budget = family.total_income - total_expenses
 
