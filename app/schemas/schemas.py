@@ -65,6 +65,13 @@ class UpdateFamilyMemberRequest(BaseModel):
     name: Optional[str] = None     # used only when member_id is missing
     allocated_budget: Optional[float] = None
     role: Optional[str] = None
+
+class AddExpenseRequest(BaseModel):
+    name: str
+    category: str
+    amount: float
+    member_id: int | None = None   # optional
+    
 # ------------------------
 # Token Output Schema
 # ------------------------
