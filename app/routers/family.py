@@ -144,6 +144,7 @@ def get_family_summary(
         "message": "Dashboard loaded",
         "total_balance": family.total_balance,
         "total_income": family.total_income,
+        "monthly_budget": family.monthly_budget,
         "total_expenses": total_expenses,
         "remaining_budget": remaining_budget,
         "family_members": member_data
