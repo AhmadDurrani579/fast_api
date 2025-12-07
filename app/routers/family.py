@@ -35,6 +35,7 @@ def family_setup(
         head_id=current_user.id,
         total_balance=payload.total_balance,
         total_income=payload.total_income,
+        monthly_budget=payload.monthly_budget,
         expected_members=",".join(payload.members),
     )
     db.add(fam)
