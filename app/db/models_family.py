@@ -12,6 +12,7 @@ class Family(Base):
 
     total_balance = Column(Float, default=0.0)
     total_income = Column(Float, default=0.0)
+    monthly_budget = Column(Float, default=0.0)    # ⭐ NEW FIELD ⭐
 
     expected_members = Column(String, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())

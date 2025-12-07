@@ -51,6 +51,7 @@ class FamilySummaryMember(BaseModel):
 class FamilySummary(BaseModel):
     total_balance: float
     total_income: float
+    monthly_budget: float
     total_expenses: float
     remaining_budget: float
     family_members: list[FamilySummaryMember]
@@ -58,6 +59,7 @@ class FamilySummary(BaseModel):
 class FamilySetupRequest(BaseModel):
     total_balance: float
     total_income: float
+    monthly_budget: float         
     members: List[str]
 
 class UpdateFamilyMemberRequest(BaseModel):
