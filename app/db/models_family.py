@@ -12,18 +12,12 @@ class Family(Base):
 
     total_balance = Column(Float, default=0.0)
     total_income = Column(Float, default=0.0)
-    monthly_budget = Column(Float, default=0.0)    # ⭐ NEW FIELD ⭐
-
+    monthly_budget = Column(Float, default=0.0)
     expected_members = Column(String, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
-
     head = relationship("UserDB", back_populates="family")
 
 
-from sqlalchemy import Column, Integer, String, Float, DateTime, ForeignKey
-from sqlalchemy.orm import relationship
-from sqlalchemy.sql import func
-from app.db.database import Base
 
 class FamilyMember(Base):
     __tablename__ = "family_members"

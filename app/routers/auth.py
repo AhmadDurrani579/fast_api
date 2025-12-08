@@ -98,7 +98,6 @@ def signup_member(payload: SignupMember, db: Session = Depends(get_db)):
     token = create_access_token(
         {"id": user.id, "email": user.email, "role": user.role}
     )
-
     return {
         "status": True,
         "message": "Family Member signup successful",
