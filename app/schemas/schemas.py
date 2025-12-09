@@ -59,10 +59,10 @@ class FamilySummary(BaseModel):
 class FamilySetupRequest(BaseModel):
     total_balance: float
     total_income: float
-    monthly_budget: float     
-    
-    year: Optional[int] = None      # Use current year if None
-    month: Optional[int] = None     # Use current month if None
+    monthly_income: float        # ⬅ NEW
+    monthly_budget: float        # ⬅ NEW
+    year: int                    # ⬅ NEW
+    month: int                   # ⬅ NEW (1–12)
     
     members: List[str]
 
