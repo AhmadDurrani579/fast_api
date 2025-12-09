@@ -8,6 +8,8 @@ from app.db.models_family import Family, FamilyMember, FamilyMonthly
 from app.deps.deps import get_current_user
 from app.schemas.schemas import FamilySetupRequest, UpdateFamilyMemberRequest
 from datetime import datetime
+from app.db.models_expenses import ExpenseDB
+
 router = APIRouter(prefix="/family", tags=["family"])
 
 
@@ -116,52 +118,71 @@ def get_family_summary(
     db: Session = Depends(get_db)
 ):
 
-    # Find family
-    family = (
-        db.query(Family)
-        .filter(
-            (Family.head_id == current_user.id)
-            | (Family.family_code == current_user.family_code)
-        )
+    # 1️⃣ Get family
+    family = db.query(Family).filter(
+        Family.family_code == current_user.family_code
+    ).first()
+
+    if not family:
+        raise HTTPException(404, "Family not found")
+
+    # 2️⃣ Get latest monthly record
+    monthly = (
+        db.query(FamilyMonthly)
+        .filter(FamilyMonthly.family_id == family.id)
+        .order_by(FamilyMonthly.year.desc(), FamilyMonthly.month.desc())
         .first()
     )
 
-    if not family:
-        raise HTTPException(status_code=404, detail="Family not found")
+    if not monthly:
+        raise HTTPException(404, "Monthly budget not set yet")
 
-    # Fetch all members for this family_code
-    members = (
-        db.query(FamilyMember)
-        .filter(FamilyMember.family_code == family.family_code)
-        .all()
-    )
+    # 3️⃣ Load all family members
+    members = db.query(FamilyMember).filter(
+        FamilyMember.family_code == family.family_code
+    ).all()
 
-    # Build member summary list with ID + role
+    # 4️⃣ Build member summary
     member_data = []
     for m in members:
         member_data.append({
-            "member_id": m.id,      # always exists
-            "user_id": m.user_id,   # real user, null if dummy
+            "member_id": m.id,
+            "user_id": m.user_id,
             "name": m.name,
             "role": m.role,
             "allocated": m.allocated_budget,
             "spent": m.spent_amount,
             "remaining": m.allocated_budget - m.spent_amount
         })
-    total_expenses = sum(m.spent_amount for m in members)
-    remaining_budget = family.total_income - total_expenses
+
+    # 5️⃣ Calculate family expenses for this month
+    month_expenses = (
+        db.query(ExpenseDB)
+        .filter(
+            ExpenseDB.family_code == family.family_code,
+            ExpenseDB.created_at.between(
+                f"{monthly.year}-{monthly.month:02d}-01",
+                f"{monthly.year}-{monthly.month:02d}-31"
+            )
+        )
+        .all()
+    )
+
+    total_expenses = sum(e.amount for e in month_expenses)
+
+    remaining_budget = monthly.monthly_income - total_expenses
 
     return {
         "status": True,
         "message": "Dashboard loaded",
-        "total_balance": family.total_balance,
-        "total_income": family.total_income,
-        "monthly_budget": family.monthly_budget,
+        "monthly_income": monthly.monthly_income,
+        "monthly_budget": monthly.monthly_budget,
+        "year": monthly.year,
+        "month": monthly.month,
         "total_expenses": total_expenses,
         "remaining_budget": remaining_budget,
         "family_members": member_data
     }
-
 
 # -------------------------------------------------
 # 4. Optional: Add Member Manually
