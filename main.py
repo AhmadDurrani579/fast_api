@@ -9,6 +9,7 @@ from app.routers import users
 from app.routers import family
 from app.routers import expense
 from app.routers import categorybudget
+from app.routers import budget
 
 # create missing tables (won't alter existing columns)
 Base.metadata.create_all(bind=engine)
@@ -40,6 +41,7 @@ app.include_router(users.router)
 app.include_router(family.router)
 app.include_router(expense.router)
 app.include_router(categorybudget.router)
+app.include_router(budget.router)
 # app.include_router(users.router)
 # app.include_router(posts.router)
 # app.include_router(comments.router)
