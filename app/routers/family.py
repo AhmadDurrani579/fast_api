@@ -23,17 +23,19 @@ def family_setup(
     if current_user.role != "head":
         raise HTTPException(403, "Only family head can create family")
 
+    # Prevent duplicate setup
     existing = db.query(Family).filter(Family.head_id == current_user.id).first()
     if existing:
         raise HTTPException(400, "Family already created")
 
-    # 1️⃣ Create Family (NO total_income here anymore)
+    # 1️⃣ Create Family
     fam = Family(
         family_code=current_user.family_code,
         head_id=current_user.id,
         total_balance=payload.total_balance,
         expected_members=",".join(payload.members)
     )
+
     db.add(fam)
     db.commit()
     db.refresh(fam)
@@ -49,14 +51,15 @@ def family_setup(
         ))
     db.commit()
 
-    # 3️⃣ Create Monthly Budget Record
+    # 3️⃣ Create Monthly Budget & Income Record
     monthly = FamilyMonthly(
         family_id=fam.id,
         year=payload.year,
         month=payload.month,
         monthly_income=payload.monthly_income,
-        monthly_budget=payload.monthly_budget,
+        monthly_budget=payload.monthly_budget
     )
+
     db.add(monthly)
     db.commit()
 
@@ -67,7 +70,9 @@ def family_setup(
             "family_code": fam.family_code,
             "members": payload.members,
             "monthly_budget": payload.monthly_budget,
-            "monthly_income": payload.monthly_income
+            "monthly_income": payload.monthly_income,
+            "year": payload.year,
+            "month": payload.month
         }
     }
 
