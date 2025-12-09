@@ -4,7 +4,7 @@ from typing import List
 
 from app.db.database import get_db
 from app.db.models import UserDB
-from app.db.models_family import Family, FamilyMember
+from app.db.models_family import Family, FamilyMember, FamilyMonthly
 from app.deps.deps import get_current_user
 from app.schemas.schemas import FamilySetupRequest, UpdateFamilyMemberRequest
 
@@ -20,51 +20,58 @@ def family_setup(
     current_user: UserDB = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    # Only head can create
     if current_user.role != "head":
-        raise HTTPException(status_code=403, detail="Only family head can create family")
+        raise HTTPException(403, "Only family head can create family")
 
-    # Check if already created
+    # Prevent duplicate setup
     existing = db.query(Family).filter(Family.head_id == current_user.id).first()
     if existing:
-        raise HTTPException(status_code=400, detail="Family already created")
+        raise HTTPException(400, "Family already created")
 
-    # Create main family record
+    # 1️⃣ Create Family
     fam = Family(
         family_code=current_user.family_code,
         head_id=current_user.id,
         total_balance=payload.total_balance,
-        total_income=payload.total_income,
-        monthly_budget=payload.monthly_budget,
-        expected_members=",".join(payload.members),
+        expected_members=",".join(payload.members)
     )
     db.add(fam)
     db.commit()
     db.refresh(fam)
 
-    # ✅ INSERT MEMBERS INTO family_members TABLE
+    # 2️⃣ Insert Family Members
     for name in payload.members:
-        member_row = FamilyMember(
-            family_code=current_user.family_code,
+        db.add(FamilyMember(
+            family_code=fam.family_code,
             name=name,
-            role="member",          # or "", doesn’t matter for now
-            allocated_budget=0.0,   # starts at 0; you will update later
-            spent_amount=0.0,
-        )
-        db.add(member_row)
+            role="member",
+            allocated_budget=0,
+            spent_amount=0
+        ))
+    db.commit()
 
+    # 3️⃣ Create Monthly Budget Record
+    monthly = FamilyMonthly(
+        family_id=fam.id,
+        year=payload.year,
+        month=payload.month,
+        monthly_income=payload.monthly_income,
+        monthly_budget=payload.monthly_budget,
+    )
+    db.add(monthly)
     db.commit()
 
     return {
         "status": True,
-        "message": "Family profile created successfully",
+        "message": "Family + Monthly Budget setup completed",
         "family": {
             "family_code": fam.family_code,
             "members": payload.members,
-            "total_balance": fam.total_balance,
-            "total_income": fam.total_income,
-        },
+            "monthly_budget": payload.monthly_budget,
+            "monthly_income": payload.monthly_income
+        }
     }
+
 # -------------------------------------------------
 # 2. Get Family Info
 # -------------------------------------------------
