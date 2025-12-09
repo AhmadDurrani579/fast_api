@@ -9,21 +9,10 @@ from app.db.models_expenses import ExpenseDB
 from app.deps.deps import get_current_user
 from app.schemas.schemas import AddExpenseRequest
 from app.db.categories_budget import CategoryBudget
+from app.constants.categories import CATEGORIES 
 
 router = APIRouter(prefix="/expense", tags=["expense"])
 
-CATEGORIES = [
-    {"name": "Groceries", "icon": "🛒", "budget": 0, "spent": 0, "remaining": 0},
-    {"name": "Food", "icon": "🍽", "budget": 0, "spent": 0, "remaining": 0},
-    {"name": "Transport", "icon": "🚌", "budget": 0, "spent": 0, "remaining": 0},
-    {"name": "Health", "icon": "💊", "budget": 0, "spent": 0, "remaining": 0},
-    {"name": "Gifts", "icon": "🎁", "budget": 0, "spent": 0, "remaining": 0},
-    {"name": "Rent", "icon": "🏠", "budget": 0, "spent": 0, "remaining": 0},
-    {"name": "Utilities", "icon": "⚡", "budget": 0, "spent": 0, "remaining": 0},
-    {"name": "Entertainment", "icon": "🎉", "budget": 0, "spent": 0, "remaining": 0},
-    {"name": "Education", "icon": "📚", "budget": 0, "spent": 0, "remaining": 0},
-    {"name": "Insurance", "icon": "🛡", "budget": 0, "spent": 0, "remaining": 0},
-]
 
 @router.get("/categories")
 def get_categories(
