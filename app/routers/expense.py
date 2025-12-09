@@ -13,16 +13,16 @@ from app.schemas.schemas import AddExpenseRequest
 router = APIRouter(prefix="/expense", tags=["expense"])
 
 CATEGORIES = [
-    {"name": "Groceries", "icon": "🛒"},
-    {"name": "Food", "icon": "🍽"},
-    {"name": "Transport", "icon": "🚌"},
-    {"name": "Health", "icon": "💊"},
-    {"name": "Gifts", "icon": "🎁"},
-    {"name": "Rent", "icon": "🏠"},
-    {"name": "Utilities", "icon": "⚡"},
-    {"name": "Entertainment", "icon": "🎉"},
-    {"name": "Education", "icon": "📚"},
-    {"name": "Insurance", "icon": "🛡"},
+    {"name": "Groceries", "icon": "🛒", "budget": 0, "spent": 0, "remaining": 0},
+    {"name": "Food", "icon": "🍽", "budget": 0, "spent": 0, "remaining": 0},
+    {"name": "Transport", "icon": "🚌", "budget": 0, "spent": 0, "remaining": 0},
+    {"name": "Health", "icon": "💊", "budget": 0, "spent": 0, "remaining": 0},
+    {"name": "Gifts", "icon": "🎁", "budget": 0, "spent": 0, "remaining": 0},
+    {"name": "Rent", "icon": "🏠", "budget": 0, "spent": 0, "remaining": 0},
+    {"name": "Utilities", "icon": "⚡", "budget": 0, "spent": 0, "remaining": 0},
+    {"name": "Entertainment", "icon": "🎉", "budget": 0, "spent": 0, "remaining": 0},
+    {"name": "Education", "icon": "📚", "budget": 0, "spent": 0, "remaining": 0},
+    {"name": "Insurance", "icon": "🛡", "budget": 0, "spent": 0, "remaining": 0},
 ]
 
 @router.get("/categories")
@@ -53,7 +53,7 @@ def add_expense(
     if payload.amount <= 0:
         raise HTTPException(400, "Amount must be greater than 0")
 
-    member_id = None  # default case = head personal expense
+    member_id = None  
 
     # --------------------------------------------------------------------
     # CASE 1: MEMBER adding expense (never allowed to choose member_id)

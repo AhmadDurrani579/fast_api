@@ -73,10 +73,13 @@ class AddExpenseRequest(BaseModel):
     category: str
     amount: float
     member_id: int | None = None   # optional
-    
-# ------------------------
-# Token Output Schema
-# ------------------------
+
+class SingleCategoryBudget(BaseModel):
+    category: str
+    budget: float
+
+class UpdateCategoryBudgetRequest(BaseModel):
+    budgets: List[SingleCategoryBudget] 
 
 # class TokenOut(BaseModel):
 #     access_token: str
