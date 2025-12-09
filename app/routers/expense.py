@@ -8,7 +8,7 @@ from app.db.models_family import Family, FamilyMember
 from app.db.models_expenses import ExpenseDB
 from app.deps.deps import get_current_user
 from app.schemas.schemas import AddExpenseRequest
-
+from app.db.categories_budget import CategoryBudget
 
 router = APIRouter(prefix="/expense", tags=["expense"])
 
@@ -26,8 +26,49 @@ CATEGORIES = [
 ]
 
 @router.get("/categories")
-def get_categories():
-    return {"status": True, "categories": CATEGORIES}
+def get_categories(
+    current_user: UserDB = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    family_code = current_user.family_code
+
+    # Fetch budget rows from DB
+    rows = db.query(CategoryBudget).filter(
+        CategoryBudget.family_code == family_code
+    ).all()
+
+    # Map for quick lookup
+    db_map = {row.category_name: row for row in rows}
+
+    result = []
+
+    for cat in CATEGORIES:
+        name = cat["name"]
+        icon = cat["icon"]
+
+        # Read values from DB if available
+        if name in db_map:
+            row = db_map[name]
+            budget = row.budget
+            spent = row.spent
+            remaining = budget - spent
+        else:
+            budget = 0
+            spent = 0
+            remaining = 0
+
+        result.append({
+            "name": name,
+            "icon": icon,
+            "budget": budget,
+            "spent": spent,
+            "remaining": remaining,
+        })
+
+    return {
+        "status": True,
+        "categories": result
+    }
 
 
 @router.post("/add")
