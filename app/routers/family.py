@@ -20,79 +20,57 @@ def family_setup(
     current_user: UserDB = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    # Only head can perform this setup
     if current_user.role != "head":
-        raise HTTPException(status_code=403, detail="Only family head can create family")
+        raise HTTPException(403, "Only family head can create family")
 
-    # Prevent duplicate family creation
     existing = db.query(Family).filter(Family.head_id == current_user.id).first()
     if existing:
-        raise HTTPException(status_code=400, detail="Family already created")
+        raise HTTPException(400, "Family already created")
 
-    # -------------------------------
-    # 1️⃣ Create Family Profile
-    # -------------------------------
+    # 1️⃣ Create Family (NO total_income here anymore)
     fam = Family(
         family_code=current_user.family_code,
         head_id=current_user.id,
         total_balance=payload.total_balance,
-        total_income=payload.monthly_income,   # initial income = monthly income
-        monthly_budget=payload.monthly_budget,
         expected_members=",".join(payload.members)
     )
     db.add(fam)
     db.commit()
     db.refresh(fam)
 
-    # -------------------------------
-    # 2️⃣ Insert Family Members (dummy)
-    # -------------------------------
+    # 2️⃣ Insert Family Members
     for name in payload.members:
-        member = FamilyMember(
+        db.add(FamilyMember(
             family_code=fam.family_code,
             name=name,
             role="member",
             allocated_budget=0,
             spent_amount=0
-        )
-        db.add(member)
-
+        ))
     db.commit()
 
-    # -------------------------------
     # 3️⃣ Create Monthly Budget Record
-    # -------------------------------
-    # If user didn’t send month/year → use current month
-    year = payload.year or datetime.utcnow().year
-    month = payload.month or datetime.utcnow().month
-
     monthly = FamilyMonthly(
         family_id=fam.id,
-        year=year,
-        month=month,
+        year=payload.year,
+        month=payload.month,
         monthly_income=payload.monthly_income,
         monthly_budget=payload.monthly_budget,
-        predicted_income=None,
-        predicted_budget=None
     )
     db.add(monthly)
     db.commit()
 
-    # -------------------------------
-    # 4️⃣ Response
-    # -------------------------------
     return {
         "status": True,
         "message": "Family + Monthly Budget setup completed",
         "family": {
             "family_code": fam.family_code,
             "members": payload.members,
-            "year": year,
-            "month": month,
-            "monthly_income": payload.monthly_income,
             "monthly_budget": payload.monthly_budget,
+            "monthly_income": payload.monthly_income
         }
     }
+
 # -------------------------------------------------
 # 2. Get Family Info
 # -------------------------------------------------
