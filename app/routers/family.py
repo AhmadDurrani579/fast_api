@@ -9,6 +9,7 @@ from app.deps.deps import get_current_user
 from app.schemas.schemas import FamilySetupRequest, UpdateFamilyMemberRequest
 from datetime import datetime
 from app.db.models_expenses import ExpenseDB
+import calendar
 
 router = APIRouter(prefix="/family", tags=["family"])
 
@@ -156,18 +157,23 @@ def get_family_summary(
         })
 
     # 5️⃣ Calculate family expenses for this month
+    year = monthly.year
+    month = monthly.month
+
+    # Last day of THAT month
+    last_day = calendar.monthrange(year, month)[1]
+
+    start_date = f"{year}-{month:02d}-01"
+    end_date = f"{year}-{month:02d}-{last_day:02d}"
+
     month_expenses = (
         db.query(ExpenseDB)
         .filter(
             ExpenseDB.family_code == family.family_code,
-            ExpenseDB.created_at.between(
-                f"{monthly.year}-{monthly.month:02d}-01",
-                f"{monthly.year}-{monthly.month:02d}-31"
-            )
+            ExpenseDB.created_at.between(start_date, end_date)
         )
         .all()
     )
-
     total_expenses = sum(e.amount for e in month_expenses)
 
     remaining_budget = monthly.monthly_income - total_expenses
