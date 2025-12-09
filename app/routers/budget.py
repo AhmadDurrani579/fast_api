@@ -38,8 +38,16 @@ def get_budget_insights(
         .first()
     )
     if not monthly:
-        raise HTTPException(404, "Monthly record not set")
-
+        monthly = FamilyMonthly(
+            family_id=family.id,
+            year=now.year,
+            month=now.month,
+            monthly_income=0,
+            monthly_budget=0
+        )
+        db.add(monthly)
+        db.commit()
+        db.refresh(monthly)
     # ---------------- CATEGORY USAGE ----------------
     categories = []
     total_spent = 0
