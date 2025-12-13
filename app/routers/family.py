@@ -304,3 +304,49 @@ def update_member(
             "remaining": member.allocated_budget - member.spent_amount,
         },
     }
+
+
+@router.get("/member/{member_id}")
+def get_member_details(
+    member_id: int,
+    current_user: UserDB = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    # --- Load member ---
+    member = db.query(FamilyMember).filter(
+        FamilyMember.id == member_id,
+        FamilyMember.family_code == current_user.family_code
+    ).first()
+
+    if not member:
+        raise HTTPException(404, "Member not found")
+
+    # --- Load expenses ---
+    expenses = db.query(ExpenseDB).filter(
+        ExpenseDB.member_id == member_id
+    ).order_by(ExpenseDB.created_at.desc()).all()
+
+    total_spent = sum(e.amount for e in expenses)
+    allocated = member.allocated_budget or 0
+
+    return {
+        "status": True,
+        "member": {
+            "member_id": member.id,
+            "name": member.name,
+            "role": member.role,
+            "allocated_budget": allocated,
+            "total_spent": total_spent,
+            "remaining": max(allocated - total_spent, 0),
+        },
+        "expenses": [
+            {
+                "id": e.id,
+                "name": e.name,
+                "category": e.category,
+                "amount": e.amount,
+                "date": e.created_at
+            }
+            for e in expenses
+        ]
+    }
