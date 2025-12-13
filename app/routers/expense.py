@@ -13,15 +13,6 @@ from app.db.categories_budget import CategoryBudget
 
 router = APIRouter(prefix="/expense", tags=["expense"])
 
-MEMBER_CATEGORIES = [
-    {"name": "Groceries", "icon": "🛒", "budget": 0, "spent": 0, "remaining": 0},
-    {"name": "Food", "icon": "🍽", "budget": 0, "spent": 0, "remaining": 0},
-    {"name": "Transport", "icon": "🚌", "budget": 0, "spent": 0, "remaining": 0},
-    {"name": "Health", "icon": "💊", "budget": 0, "spent": 0, "remaining": 0},
-    {"name": "Gifts", "icon": "🎁", "budget": 0, "spent": 0, "remaining": 0},
-    {"name": "Entertainment", "icon": "🎉", "budget": 0, "spent": 0, "remaining": 0},
-    {"name": "Education", "icon": "📚", "budget": 0, "spent": 0, "remaining": 0},
-]
 CATEGORIES = [
     {"name": "Groceries", "icon": "🛒", "budget": 0, "spent": 0, "remaining": 0},
     {"name": "Food", "icon": "🍽", "budget": 0, "spent": 0, "remaining": 0},
@@ -43,12 +34,6 @@ def get_categories(
 ):
     family_code = current_user.family_code
 
-    # ✅ Decide categories based on role
-    if current_user.role == "member":
-        categories_source = MEMBER_CATEGORIES
-    else:
-        categories_source = CATEGORIES
-
     # Fetch budget rows from DB
     rows = db.query(CategoryBudget).filter(
         CategoryBudget.family_code == family_code
@@ -59,10 +44,11 @@ def get_categories(
 
     result = []
 
-    for cat in categories_source:
+    for cat in CATEGORIES:
         name = cat["name"]
         icon = cat["icon"]
 
+        # Read values from DB if available
         if name in db_map:
             row = db_map[name]
             budget = row.budget
@@ -83,10 +69,8 @@ def get_categories(
 
     return {
         "status": True,
-        "role": current_user.role,
         "categories": result
     }
-
 
 
 @router.post("/add")
@@ -95,7 +79,7 @@ def add_expense(
     current_user: UserDB = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    # ---------------- FAMILY CHECK ----------------
+    # Load family
     family = db.query(Family).filter(
         Family.family_code == current_user.family_code
     ).first()
@@ -103,24 +87,20 @@ def add_expense(
     if not family:
         raise HTTPException(404, "Family not found")
 
-    # ---------------- ROLE-BASED CATEGORY VALIDATION ----------------
-    if current_user.role == "member":
-        if payload.category not in MEMBER_CATEGORIES:
-            raise HTTPException(
-                403,
-                "You are not allowed to use this category"
-            )
-    else:  # head
-        if payload.category not in HEAD_CATEGORIES:
-            raise HTTPException(400, "Invalid category")
+    # --- Validate category ---
+    allowed_categories = [c["name"] for c in CATEGORIES]
+    if payload.category not in allowed_categories:
+        raise HTTPException(400, "Invalid category")
 
-    # ---------------- AMOUNT VALIDATION ----------------
+    # --- Validate amount ---
     if payload.amount <= 0:
         raise HTTPException(400, "Amount must be greater than 0")
 
-    member_id = None
+    member_id = None  
 
-    # ---------------- MEMBER ADDING EXPENSE ----------------
+    # --------------------------------------------------------------------
+    # CASE 1: MEMBER adding expense (never allowed to choose member_id)
+    # --------------------------------------------------------------------
     if current_user.role == "member":
         fm = db.query(FamilyMember).filter(
             FamilyMember.family_code == family.family_code,
@@ -130,13 +110,19 @@ def add_expense(
         if not fm:
             raise HTTPException(400, "Member record not found")
 
-        member_id = fm.id  # 🔒 locked to self
+        member_id = fm.id   # locked to this user only
 
-    # ---------------- HEAD ADDING EXPENSE ----------------
+    # --------------------------------------------------------------------
+    # CASE 2: HEAD adding an expense
+    # --------------------------------------------------------------------
     elif current_user.role == "head":
+
+        # If head DID NOT send member_id → head’s own expense
         if payload.member_id is None:
-            member_id = None  # head’s own expense
+            member_id = None
+
         else:
+            # Validate chosen member belongs to family
             chosen = db.query(FamilyMember).filter(
                 FamilyMember.id == payload.member_id,
                 FamilyMember.family_code == family.family_code
@@ -147,7 +133,9 @@ def add_expense(
 
             member_id = chosen.id
 
-    # ---------------- CREATE EXPENSE ----------------
+    # --------------------------------------------------------------------
+    # CREATE EXPENSE
+    # --------------------------------------------------------------------
     exp = ExpenseDB(
         family_code=family.family_code,
         member_id=member_id,
