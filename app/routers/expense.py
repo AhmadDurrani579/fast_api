@@ -13,7 +13,7 @@ from app.db.categories_budget import CategoryBudget
 
 router = APIRouter(prefix="/expense", tags=["expense"])
 
-CATEGORIES = [
+HEAD_CATEGORIES = [
     {"name": "Groceries", "icon": "🛒", "budget": 0, "spent": 0, "remaining": 0},
     {"name": "Food", "icon": "🍽", "budget": 0, "spent": 0, "remaining": 0},
     {"name": "Transport", "icon": "🚌", "budget": 0, "spent": 0, "remaining": 0},
@@ -26,6 +26,14 @@ CATEGORIES = [
     {"name": "Insurance", "icon": "🛡", "budget": 0, "spent": 0, "remaining": 0},
 ]
 
+MEMBER_CATEGORIES = [
+    {"name": "Food", "icon": "🍽", "budget": 0, "spent": 0, "remaining": 0},
+    {"name": "Transport", "icon": "🚌", "budget": 0, "spent": 0, "remaining": 0},
+    {"name": "Entertainment", "icon": "🎉", "budget": 0, "spent": 0, "remaining": 0},
+    {"name": "Education", "icon": "📚", "budget": 0, "spent": 0, "remaining": 0},
+    {"name": "Gifts", "icon": "🎁", "budget": 0, "spent": 0, "remaining": 0},
+]
+
 
 @router.get("/categories")
 def get_categories(
@@ -34,44 +42,59 @@ def get_categories(
 ):
     family_code = current_user.family_code
 
-    # Fetch budget rows from DB
+    # ---------------- ROLE CHECK ----------------
+    if current_user.role == "member":
+        fm = db.query(FamilyMember).filter(
+            FamilyMember.family_code == family_code,
+            FamilyMember.user_id == current_user.id
+        ).first()
+
+        if not fm:
+            raise HTTPException(400, "Member record not found")
+
+        scope = "member"
+        owner_id = fm.id
+        base_categories = MEMBER_CATEGORIES
+
+    else:  # head
+        scope = "family"
+        owner_id = None
+        base_categories = HEAD_CATEGORIES
+
+    # ---------------- FETCH BUDGETS ----------------
     rows = db.query(CategoryBudget).filter(
-        CategoryBudget.family_code == family_code
+        CategoryBudget.family_code == family_code,
+        CategoryBudget.scope == scope,
+        CategoryBudget.owner_id == owner_id
     ).all()
 
-    # Map for quick lookup
+    # Safe lookup
     db_map = {row.category_name: row for row in rows}
 
+    # ---------------- BUILD RESPONSE ----------------
     result = []
 
-    for cat in CATEGORIES:
+    for cat in base_categories:
         name = cat["name"]
         icon = cat["icon"]
 
-        # Read values from DB if available
-        if name in db_map:
-            row = db_map[name]
-            budget = row.budget
-            spent = row.spent
-            remaining = budget - spent
-        else:
-            budget = 0
-            spent = 0
-            remaining = 0
+        row = db_map.get(name)
+        budget = row.budget if row else 0
+        spent = row.spent if row else 0
 
         result.append({
             "name": name,
             "icon": icon,
             "budget": budget,
             "spent": spent,
-            "remaining": remaining,
+            "remaining": max(budget - spent, 0),
         })
 
     return {
         "status": True,
+        "role": current_user.role,
         "categories": result
     }
-
 
 @router.post("/add")
 def add_expense(

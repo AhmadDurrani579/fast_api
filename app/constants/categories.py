@@ -1,14 +1,17 @@
 CATEGORIES = [
-    {"name": "Groceries", "icon": "🛒", "budget": 0, "spent": 0, "remaining": 0},
-    {"name": "Food", "icon": "🍽", "budget": 0, "spent": 0, "remaining": 0},
-    {"name": "Transport", "icon": "🚌", "budget": 0, "spent": 0, "remaining": 0},
-    {"name": "Health", "icon": "💊", "budget": 0, "spent": 0, "remaining": 0},
-    {"name": "Gifts", "icon": "🎁", "budget": 0, "spent": 0, "remaining": 0},
-    {"name": "Rent", "icon": "🏠", "budget": 0, "spent": 0, "remaining": 0},
-    {"name": "Utilities", "icon": "⚡", "budget": 0, "spent": 0, "remaining": 0},
-    {"name": "Entertainment", "icon": "🎉", "budget": 0, "spent": 0, "remaining": 0},
-    {"name": "Education", "icon": "📚", "budget": 0, "spent": 0, "remaining": 0},
-    {"name": "Insurance", "icon": "🛡", "budget": 0, "spent": 0, "remaining": 0},
+    # ---------- HEAD CATEGORIES ----------
+    {"name": "Groceries", "icon": "🛒", "scope": "head"},
+    {"name": "Food", "icon": "🍽", "scope": "head"},
+    {"name": "Transport", "icon": "🚌", "scope": "head"},
+    {"name": "Health", "icon": "💊", "scope": "head"},
+    {"name": "Gifts", "icon": "🎁", "scope": "head"},
+    {"name": "Rent", "icon": "🏠", "scope": "head"},
+    {"name": "Utilities", "icon": "⚡", "scope": "head"},
+    {"name": "Entertainment", "icon": "🎉", "scope": "head"},
+    {"name": "Education", "icon": "📚", "scope": "head"},
+    {"name": "Insurance", "icon": "🛡", "scope": "head"},
+
+    # ---------- MEMBER CATEGORIES ----------
+    {"name": "Student Groceries", "icon": "🛒", "scope": "member"},
+    {"name": "Food", "icon": "🍽", "scope": "member"},
 ]
-
-
