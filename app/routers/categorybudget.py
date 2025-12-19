@@ -6,6 +6,7 @@ from app.db.models import UserDB
 from app.db.categories_budget import CategoryBudget   # <-- import
 from app.deps.deps import get_current_user
 from app.schemas.schemas import UpdateCategoryBudgetRequest  # <-- import
+from app.db.models_family import Family, FamilyMember
 
 router = APIRouter(prefix="/categories", tags=["categories"])
 
@@ -16,28 +17,45 @@ def update_category_budget(
     current_user: UserDB = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-
-    # Only head can update budgets
-    if current_user.role != "head":
-        raise HTTPException(status_code=403, detail="Only family head can update category budgets")
-
     family_code = current_user.family_code
 
-    for item in payload.budgets:   # <-- FIXED
-        # check if row already exists
+    # ---------------- DETERMINE SCOPE ----------------
+    if current_user.role == "head":
+        scope = "family"
+        owner_id = None
+
+    elif current_user.role == "member":
+        fm = db.query(FamilyMember).filter(
+            FamilyMember.family_code == family_code,
+            FamilyMember.user_id == current_user.id
+        ).first()
+
+        if not fm:
+            raise HTTPException(400, "Member record not found")
+
+        scope = "member"
+        owner_id = fm.id
+
+    else:
+        raise HTTPException(403, "Invalid role")
+
+    # ---------------- UPDATE BUDGETS ----------------
+    for item in payload.budgets:
         row = db.query(CategoryBudget).filter(
             CategoryBudget.family_code == family_code,
-            CategoryBudget.category_name == item.category   # <-- FIXED
+            CategoryBudget.category_name == item.category,
+            CategoryBudget.scope == scope,
+            CategoryBudget.owner_id == owner_id
         ).first()
 
         if row:
-            # update existing budget
             row.budget = item.budget
         else:
-            # create new row
             row = CategoryBudget(
                 family_code=family_code,
                 category_name=item.category,
+                scope=scope,
+                owner_id=owner_id,
                 budget=item.budget,
                 spent=0
             )
@@ -47,5 +65,6 @@ def update_category_budget(
 
     return {
         "status": True,
-        "message": "Category budgets updated successfully"
+        "message": "Category budgets updated successfully",
+        "scope": scope
     }
