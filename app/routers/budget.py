@@ -10,6 +10,7 @@ from app.db.models_expenses import ExpenseDB
 from app.db.categories_budget import CategoryBudget
 from app.deps.deps import get_current_user
 from app.constants.categories import HEAD_CATEGORIES, MEMBER_CATEGORIES 
+from app.constants.categories import HEAD_CATEGORIES, MEMBER_CATEGORIES
 
 router = APIRouter(prefix="/expense", tags=["expense"])
 
@@ -52,7 +53,7 @@ def get_budget_insights(
     categories = []
     total_spent = 0
 
-    for cat in CATEGORIES:
+    for cat in HEAD_CATEGORIES:
         name = cat["name"]
 
         # Load saved budget
