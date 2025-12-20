@@ -1,7 +1,7 @@
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
-from app.models.family_member import FamilyMember
+from app.db.models_family import FamilyMember
 
 
 def get_or_assign_member(db: Session, family_code: str, user_id: int) -> FamilyMember:
