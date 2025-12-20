@@ -9,32 +9,11 @@ from app.db.models_expenses import ExpenseDB
 from app.deps.deps import get_current_user
 from app.schemas.schemas import AddExpenseRequest
 from app.db.categories_budget import CategoryBudget
+from app.utils.member_utils import get_or_assign_member
+from app.constants.categories import HEAD_CATEGORIES, MEMBER_CATEGORIES
 # from app.constants import CATEGORIES 
 
 router = APIRouter(prefix="/expense", tags=["expense"])
-
-HEAD_CATEGORIES = [
-    {"name": "Groceries", "icon": "🛒", "budget": 0, "spent": 0, "remaining": 0},
-    {"name": "Food", "icon": "🍽", "budget": 0, "spent": 0, "remaining": 0},
-    {"name": "Transport", "icon": "🚌", "budget": 0, "spent": 0, "remaining": 0},
-    {"name": "Health", "icon": "💊", "budget": 0, "spent": 0, "remaining": 0},
-    {"name": "Gifts", "icon": "🎁", "budget": 0, "spent": 0, "remaining": 0},
-    {"name": "Rent", "icon": "🏠", "budget": 0, "spent": 0, "remaining": 0},
-    {"name": "Utilities", "icon": "⚡", "budget": 0, "spent": 0, "remaining": 0},
-    {"name": "Entertainment", "icon": "🎉", "budget": 0, "spent": 0, "remaining": 0},
-    {"name": "Education", "icon": "📚", "budget": 0, "spent": 0, "remaining": 0},
-    {"name": "Insurance", "icon": "🛡", "budget": 0, "spent": 0, "remaining": 0},
-]
-
-MEMBER_CATEGORIES = [
-    {"name": "Food", "icon": "🍽", "budget": 0, "spent": 0, "remaining": 0},
-    {"name": "Transport", "icon": "🚌", "budget": 0, "spent": 0, "remaining": 0},
-    {"name": "Entertainment", "icon": "🎉", "budget": 0, "spent": 0, "remaining": 0},
-    {"name": "Education", "icon": "📚", "budget": 0, "spent": 0, "remaining": 0},
-    {"name": "Gifts", "icon": "🎁", "budget": 0, "spent": 0, "remaining": 0},
-    {"name": "Rent", "icon": "🏠", "budget": 0, "spent": 0, "remaining": 0},
-
-]
 
 
 @router.get("/categories")
@@ -46,13 +25,12 @@ def get_categories(
 
     # ---------------- ROLE CHECK ----------------
     if current_user.role == "member":
-        fm = db.query(FamilyMember).filter(
-            FamilyMember.family_code == family_code,
-            FamilyMember.user_id == current_user.id
-        ).first()
-
-        if not fm:
-            raise HTTPException(400, "Member record not found")
+        # 🔥 Auto-assign or fetch member slot
+        fm = get_or_assign_member(
+            db=db,
+            family_code=family_code,
+            user_id=current_user.id
+        )
 
         scope = "member"
         owner_id = fm.id
@@ -70,7 +48,6 @@ def get_categories(
         CategoryBudget.owner_id == owner_id
     ).all()
 
-    # Safe lookup
     db_map = {row.category_name: row for row in rows}
 
     # ---------------- BUILD RESPONSE ----------------
@@ -81,6 +58,7 @@ def get_categories(
         icon = cat["icon"]
 
         row = db_map.get(name)
+
         budget = row.budget if row else 0
         spent = row.spent if row else 0
 
@@ -97,6 +75,7 @@ def get_categories(
         "role": current_user.role,
         "categories": result
     }
+
 
 @router.post("/add")
 def add_expense(
@@ -117,7 +96,7 @@ def add_expense(
         allowed_categories = [c["name"] for c in MEMBER_CATEGORIES]
     else:
         allowed_categories = [c["name"] for c in HEAD_CATEGORIES]
-    
+
     if payload.category not in allowed_categories:
         raise HTTPException(400, "Invalid category")
 
@@ -130,13 +109,12 @@ def add_expense(
 
     # ---------------- MEMBER ----------------
     if current_user.role == "member":
-        fm = db.query(FamilyMember).filter(
-            FamilyMember.family_code == family.family_code,
-            FamilyMember.user_id == current_user.id
-        ).first()
-
-        if not fm:
-            raise HTTPException(400, "Member record not found")
+        # 🔥 Auto-link or fetch member slot
+        fm = get_or_assign_member(
+            db=db,
+            family_code=family.family_code,
+            user_id=current_user.id
+        )
 
         member_id = fm.id
         scope = "member"
@@ -155,6 +133,7 @@ def add_expense(
 
             member_id = chosen.id
         # scope stays "family"
+        # owner_id stays None
 
     # ---------------- CREATE EXPENSE ----------------
     exp = ExpenseDB(
@@ -202,7 +181,6 @@ def add_expense(
             "member_id": exp.member_id
         }
     }
-
 
 @router.get("/list")
 def list_expenses(
