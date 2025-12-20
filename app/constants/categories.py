@@ -18,6 +18,5 @@ MEMBER_CATEGORIES = [
     {"name": "Education", "icon": "📚", "budget": 0, "spent": 0, "remaining": 0},
     {"name": "Gifts", "icon": "🎁", "budget": 0, "spent": 0, "remaining": 0},
     {"name": "Rent", "icon": "🏠", "budget": 0, "spent": 0, "remaining": 0},
-
 ]
 

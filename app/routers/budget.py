@@ -9,7 +9,7 @@ from app.db.models_family import Family, FamilyMonthly
 from app.db.models_expenses import ExpenseDB
 from app.db.categories_budget import CategoryBudget
 from app.deps.deps import get_current_user
-from app.constants.categories import CATEGORIES 
+from app.constants.categories import HEAD_CATEGORIES, MEMBER_CATEGORIES 
 
 router = APIRouter(prefix="/expense", tags=["expense"])
 
