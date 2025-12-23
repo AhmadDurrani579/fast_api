@@ -104,7 +104,6 @@ def get_family(
             "family_code": fam.family_code,
             "head_id": fam.head_id,
             "total_balance": fam.total_balance,
-            "total_income": fam.total_income,
             "expected_members": fam.expected_members.split(",") if fam.expected_members else []
         }
     }
