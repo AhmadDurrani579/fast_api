@@ -12,3 +12,4 @@ python-dotenv
 python-jose[cryptography]
 requests
 transformers
+openai
