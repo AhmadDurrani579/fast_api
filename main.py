@@ -10,12 +10,13 @@ from app.routers import family
 from app.routers import expense
 from app.routers import categorybudget
 from app.routers import budget
-
+from openai import OpenAI
 # create missing tables (won't alter existing columns)
 Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="FamFin API")
 
+openai_api_key = os.getenv("OPENAI_API_KEY", "your-default-key")
 # static uploads
 UPLOAD_DIR = os.path.join(os.getcwd(), "uploads")
 os.makedirs(UPLOAD_DIR, exist_ok=True)
