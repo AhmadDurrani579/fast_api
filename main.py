@@ -16,7 +16,6 @@ Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="FamFin API")
 
-openai_api_key = os.getenv("OPENAI_API_KEY", "your-default-key")
 # static uploads
 UPLOAD_DIR = os.path.join(os.getcwd(), "uploads")
 os.makedirs(UPLOAD_DIR, exist_ok=True)
