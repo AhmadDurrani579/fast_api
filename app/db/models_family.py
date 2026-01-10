@@ -18,7 +18,6 @@ class Family(Base):
     monthly_budget = Column(Float, default=0.0)
     expected_members = Column(String, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
-
     head = relationship("UserDB", back_populates="family")
 
 # -------------------------------------------------

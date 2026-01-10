@@ -55,6 +55,7 @@ class FamilySummary(BaseModel):
     total_expenses: float
     remaining_budget: float
     family_members: list[FamilySummaryMember]
+    needs_monthly_setup: bool
 
 class FamilySetupRequest(BaseModel):
     total_balance: float
@@ -84,6 +85,12 @@ class SingleCategoryBudget(BaseModel):
 
 class UpdateCategoryBudgetRequest(BaseModel):
     budgets: List[SingleCategoryBudget] 
+
+class MonthlySetupRequest(BaseModel):
+    year: int
+    month: int
+    monthly_income: int
+    monthly_budget: int
 
 # class TokenOut(BaseModel):
 #     access_token: str

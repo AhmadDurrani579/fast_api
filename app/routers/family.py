@@ -6,7 +6,7 @@ from app.db.database import get_db
 from app.db.models import UserDB
 from app.db.models_family import Family, FamilyMember, FamilyMonthly
 from app.deps.deps import get_current_user
-from app.schemas.schemas import FamilySetupRequest, UpdateFamilyMemberRequest
+from app.schemas.schemas import FamilySetupRequest, UpdateFamilyMemberRequest, MonthlySetupRequest
 from datetime import datetime
 from app.db.models_expenses import ExpenseDB
 import calendar
@@ -79,6 +79,58 @@ def family_setup(
         }
     }
 
+@router.post("/monthly-setup")
+def monthly_setup(
+    payload: MonthlySetupRequest,
+    current_user: UserDB = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    if current_user.role != "head":
+        raise HTTPException(403, "Only family head can update monthly setup")
+
+    family = db.query(Family).filter(
+        Family.head_id == current_user.id
+    ).first()
+
+    if not family:
+        raise HTTPException(404, "Family not found")
+
+    # Prevent duplicate month
+    existing_month = db.query(FamilyMonthly).filter(
+        FamilyMonthly.family_id == family.id,
+        FamilyMonthly.year == payload.year,
+        FamilyMonthly.month == payload.month
+    ).first()
+
+    if existing_month:
+        raise HTTPException(400, "Monthly setup already exists")
+
+    # Create new monthly record
+    monthly = FamilyMonthly(
+        family_id=family.id,
+        year=payload.year,
+        month=payload.month,
+        monthly_income=payload.monthly_income,
+        monthly_budget=payload.monthly_budget
+    )
+
+    db.add(monthly)
+
+    # Reset member spent
+    db.query(FamilyMember).filter(
+        FamilyMember.family_code == family.family_code
+    ).update({"spent_amount": 0})
+
+    db.commit()
+
+    return {
+        "status": True,
+        "message": "Monthly setup completed",
+        "year": payload.year,
+        "month": payload.month
+    }
+
+
 # -------------------------------------------------
 # 2. Get Family Info
 # -------------------------------------------------
@@ -117,8 +169,6 @@ def get_family_summary(
     current_user: UserDB = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-
-    # 1️⃣ Get family
     family = db.query(Family).filter(
         Family.family_code == current_user.family_code
     ).first()
@@ -126,8 +176,22 @@ def get_family_summary(
     if not family:
         raise HTTPException(404, "Family not found")
 
-    # 2️⃣ Get latest monthly record
+    now = datetime.utcnow()
+    current_year = now.year
+    current_month = now.month
+
+    # 🔍 Check if current month setup exists
+    current_monthly = db.query(FamilyMonthly).filter(
+        FamilyMonthly.family_id == family.id,
+        FamilyMonthly.year == current_year,
+        FamilyMonthly.month == current_month
+    ).first()
+
+    needs_monthly_setup = current_monthly is None
+
+    # If exists → use it, else fallback to latest (read-only)
     monthly = (
+        current_monthly or
         db.query(FamilyMonthly)
         .filter(FamilyMonthly.family_id == family.id)
         .order_by(FamilyMonthly.year.desc(), FamilyMonthly.month.desc())
@@ -137,45 +201,31 @@ def get_family_summary(
     if not monthly:
         raise HTTPException(404, "Monthly budget not set yet")
 
-    # 3️⃣ Load all family members
     members = db.query(FamilyMember).filter(
         FamilyMember.family_code == family.family_code
     ).all()
 
-    # 4️⃣ Build member summary
-    member_data = []
-    for m in members:
-        member_data.append({
-            "member_id": m.id,
-            "user_id": m.user_id,
-            "name": m.name,
-            "role": m.role,
-            "allocated": m.allocated_budget,
-            "spent": m.spent_amount,
-            "remaining": m.allocated_budget - m.spent_amount
-        })
+    member_data = [{
+        "member_id": m.id,
+        "user_id": m.user_id,
+        "name": m.name,
+        "role": m.role,
+        "allocated": m.allocated_budget,
+        "spent": m.spent_amount,
+        "remaining": m.allocated_budget - m.spent_amount
+    } for m in members]
 
-    # 5️⃣ Calculate family expenses for this month
-    year = monthly.year
-    month = monthly.month
+    last_day = calendar.monthrange(monthly.year, monthly.month)[1]
+    start_date = f"{monthly.year}-{monthly.month:02d}-01"
+    end_date = f"{monthly.year}-{monthly.month:02d}-{last_day:02d}"
 
-    # Last day of THAT month
-    last_day = calendar.monthrange(year, month)[1]
+    month_expenses = db.query(ExpenseDB).filter(
+        ExpenseDB.family_code == family.family_code,
+        ExpenseDB.created_at.between(start_date, end_date)
+    ).all()
 
-    start_date = f"{year}-{month:02d}-01"
-    end_date = f"{year}-{month:02d}-{last_day:02d}"
-
-    month_expenses = (
-        db.query(ExpenseDB)
-        .filter(
-            ExpenseDB.family_code == family.family_code,
-            ExpenseDB.created_at.between(start_date, end_date)
-        )
-        .all()
-    )
     total_expenses = sum(e.amount for e in month_expenses)
-
-    remaining_budget = monthly.monthly_income - total_expenses
+    remaining_budget = monthly.monthly_budget - total_expenses
 
     return {
         "status": True,
@@ -186,9 +236,11 @@ def get_family_summary(
         "month": monthly.month,
         "total_expenses": total_expenses,
         "remaining_budget": remaining_budget,
-        "family_members": member_data
-    }
+        "family_members": member_data,
 
+        # ✅ NEW FLAG
+        "needs_monthly_setup": needs_monthly_setup
+    }
 # -------------------------------------------------
 # 4. Optional: Add Member Manually
 # -------------------------------------------------
