@@ -13,8 +13,7 @@ class Family(Base):
     id = Column(Integer, primary_key=True, index=True)
     family_code = Column(String(10), unique=True, index=True, nullable=False)
     head_id = Column(Integer, ForeignKey("user_accounts.id"), nullable=False)
-
-    total_balance = Column(Float, default=0.0)
+    starting_balance = Column(Float, nullable=False)
     monthly_budget = Column(Float, default=0.0)
     expected_members = Column(String, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())

@@ -26,41 +26,50 @@ def family_setup(
     if current_user.role != "head":
         raise HTTPException(403, "Only family head can create family")
 
-    # Prevent duplicate setup
-    existing = db.query(Family).filter(Family.head_id == current_user.id).first()
+    # ❗ Prevent duplicate family creation
+    existing = db.query(Family).filter(
+        Family.head_id == current_user.id
+    ).first()
+
     if existing:
         raise HTTPException(400, "Family already created")
 
-    # 1️⃣ Create Family
-    fam = Family(
+    # ---------------- 1️⃣ CREATE FAMILY (ONE TIME) ----------------
+    family = Family(
         family_code=current_user.family_code,
         head_id=current_user.id,
-        total_balance=payload.total_balance,
+        total_balance=payload.starting_balance,
         expected_members=",".join(payload.members)
     )
 
-    db.add(fam)
+    db.add(family)
     db.commit()
-    db.refresh(fam)
+    db.refresh(family)
 
-    # 2️⃣ Insert Family Members
+    # ---------------- 2️⃣ CREATE FAMILY MEMBERS ----------------
     for name in payload.members:
-        db.add(FamilyMember(
-            family_code=fam.family_code,
-            name=name,
-            role="member",
-            allocated_budget=0,
-            spent_amount=0
-        ))
+        db.add(
+            FamilyMember(
+                family_code=family.family_code,
+                name=name.strip(),
+                role="member",
+                allocated_budget=0,
+                spent_amount=0
+            )
+        )
     db.commit()
 
-    # 3️⃣ Create Monthly Budget & Income Record
+    # ---------------- 3️⃣ CREATE FIRST MONTHLY RECORD ----------------
+    closing_balance = payload.starting_balance + payload.monthly_income
+
     monthly = FamilyMonthly(
-        family_id=fam.id,
+        family_id=family.id,
         year=payload.year,
         month=payload.month,
+        starting_balance=payload.starting_balance,
         monthly_income=payload.monthly_income,
-        monthly_budget=payload.monthly_budget
+        monthly_budget=payload.monthly_budget,
+        closing_balance=closing_balance
     )
 
     db.add(monthly)
@@ -68,16 +77,21 @@ def family_setup(
 
     return {
         "status": True,
-        "message": "Family + Monthly Budget setup completed",
+        "message": "Family setup completed successfully",
         "family": {
-            "family_code": fam.family_code,
-            "members": payload.members,
-            "monthly_budget": payload.monthly_budget,
-            "monthly_income": payload.monthly_income,
+            "family_code": family.family_code,
+            "members": payload.members
+        },
+        "monthly": {
             "year": payload.year,
-            "month": payload.month
+            "month": payload.month,
+            "starting_balance": payload.starting_balance,
+            "monthly_income": payload.monthly_income,
+            "monthly_budget": payload.monthly_budget,
+            "closing_balance": closing_balance
         }
     }
+
 
 @router.post("/monthly-setup")
 def monthly_setup(

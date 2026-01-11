@@ -58,13 +58,11 @@ class FamilySummary(BaseModel):
     needs_monthly_setup: bool
 
 class FamilySetupRequest(BaseModel):
-    total_balance: float
-    total_income: float
-    monthly_income: float        # ⬅ NEW
-    monthly_budget: float        # ⬅ NEW
-    year: int                    # ⬅ NEW
-    month: int                   # ⬅ NEW (1–12)
-    
+    starting_balance: float      # 🔑 renamed from opening_balance
+    monthly_income: float
+    monthly_budget: float
+    year: int
+    month: int                   # 1–12
     members: List[str]
 
 class UpdateFamilyMemberRequest(BaseModel):
