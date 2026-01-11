@@ -201,11 +201,17 @@ def get_family(
 # -------------------------------------------------
 # 3. Dashboard Summary (SHOW MEMBERS)
 # -------------------------------------------------
+from datetime import datetime
+import calendar
+from fastapi import Depends, HTTPException
+from sqlalchemy.orm import Session
+
 @router.get("/summary")
 def get_family_summary(
     current_user: UserDB = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
+    # ---------------- FAMILY ----------------
     family = db.query(Family).filter(
         Family.family_code == current_user.family_code
     ).first()
@@ -213,11 +219,11 @@ def get_family_summary(
     if not family:
         raise HTTPException(404, "Family not found")
 
+    # ---------------- CURRENT MONTH ----------------
     now = datetime.utcnow()
     current_year = now.year
     current_month = now.month
 
-    # 🔍 Check if current month setup exists
     current_monthly = db.query(FamilyMonthly).filter(
         FamilyMonthly.family_id == family.id,
         FamilyMonthly.year == current_year,
@@ -226,7 +232,7 @@ def get_family_summary(
 
     needs_monthly_setup = current_monthly is None
 
-    # If exists → use it, else fallback to latest (read-only)
+    # If current month not set → fallback to latest (read-only)
     monthly = (
         current_monthly or
         db.query(FamilyMonthly)
@@ -238,6 +244,7 @@ def get_family_summary(
     if not monthly:
         raise HTTPException(404, "Monthly budget not set yet")
 
+    # ---------------- MEMBERS ----------------
     members = db.query(FamilyMember).filter(
         FamilyMember.family_code == family.family_code
     ).all()
@@ -252,6 +259,7 @@ def get_family_summary(
         "remaining": m.allocated_budget - m.spent_amount
     } for m in members]
 
+    # ---------------- EXPENSES ----------------
     last_day = calendar.monthrange(monthly.year, monthly.month)[1]
     start_date = f"{monthly.year}-{monthly.month:02d}-01"
     end_date = f"{monthly.year}-{monthly.month:02d}-{last_day:02d}"
@@ -262,20 +270,35 @@ def get_family_summary(
     ).all()
 
     total_expenses = sum(e.amount for e in month_expenses)
-    remaining_budget = monthly.monthly_budget - total_expenses
 
+    # ---------------- BALANCE LOGIC ----------------
+    opening_balance = monthly.opening_balance
+    remaining_budget = monthly.monthly_budget - total_expenses
+    closing_balance = opening_balance + monthly.monthly_income - total_expenses
+
+    # ---------------- RESPONSE ----------------
     return {
         "status": True,
         "message": "Dashboard loaded",
+
+        # ✅ BALANCES
+        "opening_balance": opening_balance,
         "monthly_income": monthly.monthly_income,
         "monthly_budget": monthly.monthly_budget,
+        "closing_balance": closing_balance,
+
+        # ✅ TIME
         "year": monthly.year,
         "month": monthly.month,
+
+        # ✅ EXPENSES
         "total_expenses": total_expenses,
         "remaining_budget": remaining_budget,
+
+        # ✅ MEMBERS
         "family_members": member_data,
 
-        # ✅ NEW FLAG
+        # ✅ MONTH STATUS
         "needs_monthly_setup": needs_monthly_setup
     }
 # -------------------------------------------------
