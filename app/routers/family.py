@@ -109,28 +109,48 @@ def monthly_setup(
     if not family:
         raise HTTPException(404, "Family not found")
 
-    # Prevent duplicate month
-    existing_month = db.query(FamilyMonthly).filter(
+    # ❗ Prevent duplicate month
+    existing = db.query(FamilyMonthly).filter(
         FamilyMonthly.family_id == family.id,
         FamilyMonthly.year == payload.year,
         FamilyMonthly.month == payload.month
     ).first()
 
-    if existing_month:
+    if existing:
         raise HTTPException(400, "Monthly setup already exists")
 
-    # Create new monthly record
+    # 🔹 Get previous month (for opening balance)
+    previous_month = (
+        db.query(FamilyMonthly)
+        .filter(FamilyMonthly.family_id == family.id)
+        .order_by(
+            FamilyMonthly.year.desc(),
+            FamilyMonthly.month.desc()
+        )
+        .first()
+    )
+
+    starting_balance = (
+        previous_month.closing_balance if previous_month else family.starting_balance
+    )
+
+    # 🔹 Calculate closing balance (initially, no expenses yet)
+    closing_balance = starting_balance + payload.monthly_income
+
+    # 🔹 Create new monthly record
     monthly = FamilyMonthly(
         family_id=family.id,
         year=payload.year,
         month=payload.month,
+        starting_balance=starting_balance,
         monthly_income=payload.monthly_income,
-        monthly_budget=payload.monthly_budget
+        monthly_budget=payload.monthly_budget,
+        closing_balance=closing_balance
     )
 
     db.add(monthly)
 
-    # Reset member spent
+    # 🔹 Reset member spending for new month
     db.query(FamilyMember).filter(
         FamilyMember.family_code == family.family_code
     ).update({"spent_amount": 0})
@@ -141,9 +161,12 @@ def monthly_setup(
         "status": True,
         "message": "Monthly setup completed",
         "year": payload.year,
-        "month": payload.month
+        "month": payload.month,
+        "starting_balance": starting_balance,
+        "monthly_income": payload.monthly_income,
+        "monthly_budget": payload.monthly_budget,
+        "closing_balance": closing_balance
     }
-
 
 # -------------------------------------------------
 # 2. Get Family Info

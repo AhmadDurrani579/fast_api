@@ -87,8 +87,9 @@ class UpdateCategoryBudgetRequest(BaseModel):
 class MonthlySetupRequest(BaseModel):
     year: int
     month: int
-    monthly_income: int
-    monthly_budget: int
+    opening_balance: float   # ✅ REQUIRED
+    monthly_income: float
+    monthly_budget: float
 
 # class TokenOut(BaseModel):
 #     access_token: str
