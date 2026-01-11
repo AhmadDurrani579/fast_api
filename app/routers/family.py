@@ -38,7 +38,7 @@ def family_setup(
     family = Family(
         family_code=current_user.family_code,
         head_id=current_user.id,
-        total_balance=payload.starting_balance,
+        starting_balance=payload.starting_balance,
         expected_members=",".join(payload.members)
     )
 
