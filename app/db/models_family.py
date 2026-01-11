@@ -47,11 +47,10 @@ class FamilyMonthly(Base):
 
     year = Column(Integer, nullable=False)
     month = Column(Integer, nullable=False)
-
+    # 🔹 NEW FIELDS
+    starting_balance = Column(Float, nullable=False)
     monthly_income = Column(Float, default=0.0)
     monthly_budget = Column(Float, default=0.0)
-
-    predicted_income = Column(Float, nullable=True)
-    predicted_budget = Column(Float, nullable=True)
+    closing_balance = Column(Float, nullable=False)
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())
