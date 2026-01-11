@@ -272,7 +272,7 @@ def get_family_summary(
     total_expenses = sum(e.amount for e in month_expenses)
 
     # ---------------- BALANCE LOGIC ----------------
-    opening_balance = monthly.opening_balance
+    opening_balance = monthly.starting_balance
     remaining_budget = monthly.monthly_budget - total_expenses
     closing_balance = opening_balance + monthly.monthly_income - total_expenses
 
