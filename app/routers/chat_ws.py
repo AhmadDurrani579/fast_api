@@ -60,7 +60,7 @@ async def chat_socket(websocket: WebSocket):
                 # 🤖 Temporary static reply
                 await websocket.send_json({
                     "type": "assistant_message",
-                    "content": "Hi, how are you?"
+                    "content": "Hi, how are you Talha?" 
                 })
 
             except asyncio.TimeoutError:
