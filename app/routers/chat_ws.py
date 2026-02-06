@@ -20,10 +20,11 @@ def verify_jwt(token: str):
 async def chat_socket(websocket: WebSocket):
     # 🔐 Get token from query params
     token = websocket.query_params.get("token")
-
     if not token:
         await websocket.close(code=1008)  # Policy violation
         return
+    
+    token = token.strip()
 
     user = verify_jwt(token)
     if not user:
