@@ -66,7 +66,7 @@ async def chat_socket(websocket: WebSocket):
             # -------------------------
             # 1️⃣ Extract month/year
             # -------------------------
-            month_data = extract_month_year(user_message)
+            month_data = date_extractor.extract_month_year(user_message)
             year = month_data["year"]
             month = month_data["month"]
 
