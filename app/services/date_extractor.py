@@ -26,28 +26,28 @@ class DateExtractor:
     def extract_month_year(self, user_message: str):
         now = datetime.utcnow()
 
-        # If no OpenAI key → fallback immediately
         if not self.client:
             return {
                 "year": now.year,
                 "month": now.month
             }
 
-        response = self.client.chat.completions.create(
-            model=settings.OPENAI_MODEL,
-            messages=[
-                {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": user_message}
-            ],
-            temperature=0
-        )
-
-        content = response.choices[0].message.content.strip()
-
         try:
+            response = self.client.chat.completions.create(
+                model=settings.OPENAI_MODEL,
+                messages=[
+                    {"role": "system", "content": SYSTEM_PROMPT},
+                    {"role": "user", "content": user_message}
+                ],
+                temperature=0
+            )
+
+            content = response.choices[0].message.content.strip()
+
             parsed = json.loads(content)
             return parsed
-        except:
+
+        except Exception:
             return {
                 "year": now.year,
                 "month": now.month
