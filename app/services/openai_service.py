@@ -7,7 +7,11 @@ from app.core.config import settings
 class OpenAIService:
     def __init__(self) -> None:
         # SDK reads key from env automatically too, but we pass explicitly
-        self.client = OpenAI(api_key=settings.OPENAI_API_KEY)
+        if not settings.OPENAI_API_KEY:
+            self.client = None
+        else:
+            self.client = OpenAI(api_key=settings.OPENAI_API_KEY)
+
         self.model = settings.OPENAI_MODEL
 
     def chat(self, system_prompt: str, user_message: str, context_text: str = "", history: list[dict] | None = None) -> str:
@@ -35,29 +39,44 @@ class OpenAIService:
 
         return resp.choices[0].message.content or ""
 
-    def chat_with_context(self, user_message: str, finance_data: dict):
+def chat_with_context(self, user_message: str, finance_data: dict | None = None):
 
-        structured_context = f"""
-        Here is the user's financial data:
+    messages = [
+        {"role": "system", "content": self.system_prompt}
+    ]
 
+    # ----------------------------
+    # If finance data exists
+    # ----------------------------
+    if finance_data:
+        finance_summary = f"""
+        Financial Data:
         Year: {finance_data['year']}
         Month: {finance_data['month']}
-        Opening Balance: PKR {finance_data['opening_balance']}
-        Monthly Income: PKR {finance_data['monthly_income']}
-        Monthly Budget: PKR {finance_data['monthly_budget']}
-        Total Expenses: PKR {finance_data['total_expenses']}
-        Closing Balance: PKR {finance_data['closing_balance']}
+        Opening Balance: {finance_data['opening_balance']}
+        Monthly Income: {finance_data['monthly_income']}
+        Monthly Budget: {finance_data['monthly_budget']}
+        Closing Balance: {finance_data['closing_balance']}
+        Total Expenses: {finance_data['total_expenses']}
         """
 
-        messages = [
-            {"role": "system", "content": self.system_prompt},
-            {"role": "user", "content": structured_context},
-            {"role": "user", "content": user_message}
-        ]
+        messages.append({
+            "role": "system",
+            "content": finance_summary
+        })
 
-        response = self.client.chat.completions.create(
-            model=self.model,
-            messages=messages
-        )
+    # ----------------------------
+    # Always append user message
+    # ----------------------------
+    messages.append({
+        "role": "user",
+        "content": user_message
+    })
 
-        return response.choices[0].message.content
+    response = self.client.chat.completions.create(
+        model=settings.OPENAI_MODEL,
+        messages=messages,
+        temperature=0.7
+    )
+
+    return response.choices[0].message.content
