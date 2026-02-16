@@ -28,6 +28,9 @@ def verify_jwt(token: str):
 @router.websocket("/ws/chat")
 async def chat_socket(websocket: WebSocket):
 
+    # -------------------------
+    # 🔐 AUTH
+    # -------------------------
     token = websocket.query_params.get("token")
     if not token:
         await websocket.close(code=1008)
@@ -48,11 +51,11 @@ async def chat_socket(websocket: WebSocket):
 
     try:
         while True:
-            data = await websocket.receive_json()
-            user_message = data.get("content")
 
-            date_info = date_extractor.extract_month_year(user_message)       
-            print("Extracted:", date_info)
+            # -------------------------
+            # 📩 RECEIVE MESSAGE
+            # -------------------------
+            data = await websocket.receive_json()
 
             if "content" not in data:
                 await websocket.send_json({
@@ -61,17 +64,30 @@ async def chat_socket(websocket: WebSocket):
                 })
                 continue
 
-            user_message = data["content"]
+            user_message = data["content"].strip()
+            lower_message = user_message.lower()
 
             # -------------------------
-            # 1️⃣ Extract month/year
+            # 🟢 GREETING DETECTION
+            # -------------------------
+            if any(greet in lower_message for greet in ["hi", "hello", "hey"]):
+                await websocket.send_json({
+                    "type": "assistant_message",
+                    "content": "Hello! I'm your finance assistant. How can I help you today?"
+                })
+                continue
+
+            # -------------------------
+            # 📅 EXTRACT MONTH/YEAR
             # -------------------------
             month_data = date_extractor.extract_month_year(user_message)
             year = month_data["year"]
             month = month_data["month"]
 
+            print("Extracted date:", year, month)
+
             # -------------------------
-            # 2️⃣ Get family
+            # 👨‍👩‍👧 GET FAMILY
             # -------------------------
             family = db.query(Family).filter(
                 Family.head_id == user_id
@@ -85,7 +101,7 @@ async def chat_socket(websocket: WebSocket):
                 continue
 
             # -------------------------
-            # 3️⃣ Get monthly record
+            # 📊 GET MONTHLY DATA
             # -------------------------
             monthly = db.query(FamilyMonthly).filter(
                 FamilyMonthly.family_id == family.id,
@@ -101,7 +117,7 @@ async def chat_socket(websocket: WebSocket):
                 continue
 
             # -------------------------
-            # 4️⃣ Get expenses
+            # 💸 GET EXPENSES (for that family)
             # -------------------------
             expenses = db.query(ExpenseDB).filter(
                 ExpenseDB.family_code == family.family_code
@@ -110,7 +126,7 @@ async def chat_socket(websocket: WebSocket):
             total_expenses = sum(e.amount for e in expenses)
 
             # -------------------------
-            # 5️⃣ Build structured finance context
+            # 🧠 BUILD FINANCE CONTEXT
             # -------------------------
             finance_context = {
                 "year": year,
@@ -123,7 +139,7 @@ async def chat_socket(websocket: WebSocket):
             }
 
             # -------------------------
-            # 6️⃣ Call OpenAI
+            # 🤖 CALL OPENAI
             # -------------------------
             ai_reply = ai.chat_with_context(
                 user_message=user_message,
@@ -131,7 +147,7 @@ async def chat_socket(websocket: WebSocket):
             )
 
             # -------------------------
-            # 7️⃣ Send response
+            # 📤 SEND RESPONSE
             # -------------------------
             await websocket.send_json({
                 "type": "assistant_message",
@@ -140,5 +156,6 @@ async def chat_socket(websocket: WebSocket):
 
     except WebSocketDisconnect:
         print(f"WebSocket disconnected | user_id={user_id}")
+
     finally:
         db.close()
