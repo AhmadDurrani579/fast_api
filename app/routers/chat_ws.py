@@ -96,7 +96,7 @@ async def chat_socket(websocket: WebSocket):
             if not family:
                 await websocket.send_json({
                     "type": "assistant_message",
-                    "content": "No family data found."
+                    "content": "I couldn't find your family profile. Please complete setup first."
                 })
                 continue
 
@@ -111,39 +111,29 @@ async def chat_socket(websocket: WebSocket):
 
             finance_context = None
 
+            # -------------------------
+            # 💸 BUILD CONTEXT ONLY IF MONTH EXISTS
+            # -------------------------
             if monthly:
+
+                expenses = db.query(ExpenseDB).filter(
+                    ExpenseDB.family_code == family.family_code
+                ).all()
+
+                total_expenses = sum(e.amount for e in expenses)
+
                 finance_context = {
-                    ...
+                    "year": year,
+                    "month": month,
+                    "opening_balance": monthly.starting_balance,
+                    "monthly_income": monthly.monthly_income,
+                    "monthly_budget": monthly.monthly_budget,
+                    "closing_balance": monthly.closing_balance,
+                    "total_expenses": total_expenses
                 }
 
-            ai_reply = ai.chat_with_context(
-                user_message=user_message,
-                finance_data=finance_context
-            )
             # -------------------------
-            # 💸 GET EXPENSES (for that family)
-            # -------------------------
-            expenses = db.query(ExpenseDB).filter(
-                ExpenseDB.family_code == family.family_code
-            ).all()
-
-            total_expenses = sum(e.amount for e in expenses)
-
-            # -------------------------
-            # 🧠 BUILD FINANCE CONTEXT
-            # -------------------------
-            finance_context = {
-                "year": year,
-                "month": month,
-                "opening_balance": monthly.starting_balance,
-                "monthly_income": monthly.monthly_income,
-                "monthly_budget": monthly.monthly_budget,
-                "closing_balance": monthly.closing_balance,
-                "total_expenses": total_expenses
-            }
-
-            # -------------------------
-            # 🤖 CALL OPENAI
+            # 🤖 CALL OPENAI (SAFE)
             # -------------------------
             ai_reply = ai.chat_with_context(
                 user_message=user_message,
