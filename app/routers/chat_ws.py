@@ -7,7 +7,6 @@ from sqlalchemy.orm import Session
 from app.db.database import SessionLocal
 from app.db.models_family import Family, FamilyMonthly
 from app.db.models_expenses import ExpenseDB
-from app.services.date_extractor import extract_month_year
 from app.services.date_extractor import DateExtractor
 
 router = APIRouter()
@@ -52,9 +51,9 @@ async def chat_socket(websocket: WebSocket):
             data = await websocket.receive_json()
             user_message = data.get("content")
 
-            date_info = date_extractor.extract_month_year(user_message)
+            date_info = date_extractor.extract_month_year(user_message)       
             print("Extracted:", date_info)
-            
+
             if "content" not in data:
                 await websocket.send_json({
                     "type": "error",
