@@ -109,13 +109,17 @@ async def chat_socket(websocket: WebSocket):
                 FamilyMonthly.month == month
             ).first()
 
-            if not monthly:
-                await websocket.send_json({
-                    "type": "assistant_message",
-                    "content": f"No data found for {month}/{year}"
-                })
-                continue
+            finance_context = None
 
+            if monthly:
+                finance_context = {
+                    ...
+                }
+
+            ai_reply = ai.chat_with_context(
+                user_message=user_message,
+                finance_data=finance_context
+            )
             # -------------------------
             # 💸 GET EXPENSES (for that family)
             # -------------------------
