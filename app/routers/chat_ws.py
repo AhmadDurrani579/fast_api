@@ -14,7 +14,10 @@ import calendar
 router = APIRouter()
 ai = OpenAIService()
 date_extractor = DateExtractor()
-# ---------------- JWT VERIFY ----------------
+
+
+# Simple helper to decode and verify JWT token.
+# Returns the payload if valid, otherwise None.
 def verify_jwt(token: str):
     try:
         payload = jwt.decode(
@@ -30,9 +33,7 @@ def verify_jwt(token: str):
 @router.websocket("/ws/chat")
 async def chat_socket(websocket: WebSocket):
 
-    # -------------------------
-    # 🔐 AUTH
-    # -------------------------
+    # First, check if the client has provided a token in the query params
     token = websocket.query_params.get("token")
     if not token:
         await websocket.close(code=1008)
@@ -41,24 +42,26 @@ async def chat_socket(websocket: WebSocket):
     token = token.strip()
     user = verify_jwt(token)
 
+    # If token is invalid or expired, close the connection
     if not user:
         await websocket.close(code=1008)
         return
 
+    # Accept the WebSocket connection once authentication succeeds
     await websocket.accept()
     user_id = user.get("id")
     print(f"WebSocket connected | user_id={user_id}")
 
+    # Create a DB session for this WebSocket connection
     db: Session = SessionLocal()
 
     try:
         while True:
 
-            # -------------------------
-            # 📩 RECEIVE MESSAGE
-            # -------------------------
+            # Wait for a message from the frontend
             data = await websocket.receive_json()
 
+            # Basic validation to ensure proper message format
             if "content" not in data:
                 await websocket.send_json({
                     "type": "error",
@@ -69,9 +72,7 @@ async def chat_socket(websocket: WebSocket):
             user_message = data["content"].strip()
             lower_message = user_message.lower()
 
-            # -------------------------
-            # 🟢 GREETING DETECTION
-            # -------------------------
+            # Handle simple greetings directly without calling AI or DB
             if any(greet in lower_message for greet in ["hi", "hello", "hey"]):
                 await websocket.send_json({
                     "type": "assistant_message",
@@ -79,9 +80,7 @@ async def chat_socket(websocket: WebSocket):
                 })
                 continue
 
-            # -------------------------
-            # 🧠 INTENT DETECTION
-            # -------------------------
+            # Check whether the message is related to finance
             finance_keywords = [
                 "budget", "spend", "income",
                 "expenses", "saving", "balance"
@@ -91,9 +90,8 @@ async def chat_socket(websocket: WebSocket):
                 word in lower_message for word in finance_keywords
             )
 
-            # -------------------------
-            # 🚫 Not finance related
-            # -------------------------
+            # If the message is not finance-related,
+            # forward it to the AI without any financial context
             if not requires_finance_data:
                 ai_reply = ai.chat_with_context(
                     user_message=user_message,
@@ -106,16 +104,12 @@ async def chat_socket(websocket: WebSocket):
                 })
                 continue
 
-            # -------------------------
-            # 📅 Extract month/year
-            # -------------------------
+            # Try to extract month and year from the user's message
             month_data = date_extractor.extract_month_year(user_message)
             year = month_data["year"]
             month = month_data["month"]
 
-            # -------------------------
-            # 👨‍👩‍👧 Get family
-            # -------------------------
+            # Retrieve the family record where this user is the head
             family = db.query(Family).filter(
                 Family.head_id == user_id
             ).first()
@@ -127,16 +121,14 @@ async def chat_socket(websocket: WebSocket):
                 })
                 continue
 
-            # -------------------------
-            # 📊 Try specific month first
-            # -------------------------
+            # First attempt: get financial data for the requested month
             monthly = db.query(FamilyMonthly).filter(
                 FamilyMonthly.family_id == family.id,
                 FamilyMonthly.year == year,
                 FamilyMonthly.month == month
             ).first()
 
-            # If not found → fallback to latest month
+            # If that month doesn't exist, fallback to the latest available month
             if not monthly:
                 monthly = db.query(FamilyMonthly).filter(
                     FamilyMonthly.family_id == family.id
@@ -145,6 +137,7 @@ async def chat_socket(websocket: WebSocket):
                     FamilyMonthly.month.desc()
                 ).first()
 
+            # If still nothing found, inform the user
             if not monthly:
                 await websocket.send_json({
                     "type": "assistant_message",
@@ -152,9 +145,7 @@ async def chat_socket(websocket: WebSocket):
                 })
                 continue
 
-            # -------------------------
-            # 💸 Filter expenses by month
-            # -------------------------
+            # Build start and end date range for the selected month
             last_day = calendar.monthrange(monthly.year, monthly.month)[1]
 
             start_date = datetime(monthly.year, monthly.month, 1)
@@ -165,6 +156,7 @@ async def chat_socket(websocket: WebSocket):
                 23, 59, 59
             )
 
+            # Fetch all expenses for that family within the month range
             expenses = db.query(ExpenseDB).filter(
                 ExpenseDB.family_code == family.family_code,
                 ExpenseDB.created_at >= start_date,
@@ -173,9 +165,7 @@ async def chat_socket(websocket: WebSocket):
 
             total_expenses = sum(e.amount for e in expenses)
 
-            # -------------------------
-            # 🧠 Build Finance Context
-            # -------------------------
+            # Prepare structured financial data to send into the AI
             finance_context = {
                 "year": monthly.year,
                 "month": monthly.month,
@@ -186,17 +176,13 @@ async def chat_socket(websocket: WebSocket):
                 "total_expenses": total_expenses
             }
 
-            # -------------------------
-            # 🤖 Call OpenAI
-            # -------------------------
+            # Generate AI response using both user message and finance context
             ai_reply = ai.chat_with_context(
                 user_message=user_message,
                 finance_data=finance_context
             )
 
-            # -------------------------
-            # 📤 Send Response
-            # -------------------------
+            # Send the AI response back to the client
             await websocket.send_json({
                 "type": "assistant_message",
                 "content": ai_reply
@@ -204,6 +190,6 @@ async def chat_socket(websocket: WebSocket):
 
     except WebSocketDisconnect:
         print(f"WebSocket disconnected | user_id={user_id}")
-
     finally:
+        # Make sure DB session is always closed when connection ends
         db.close()
