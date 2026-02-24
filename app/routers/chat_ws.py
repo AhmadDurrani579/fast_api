@@ -73,13 +73,16 @@ async def chat_socket(websocket: WebSocket):
             lower_message = user_message.lower()
 
             # Handle simple greetings directly without calling AI or DB
-            if any(greet in lower_message for greet in ["hi", "hello", "hey"]):
+            greetings = ["hi", "hello", "hey"]
+
+            words = lower_message.split()
+
+            if words and words[0] in greetings:
                 await websocket.send_json({
                     "type": "assistant_message",
                     "content": "Hello! I'm your finance assistant. How can I help you today?"
                 })
                 continue
-
             # Check whether the message is related to finance
             finance_keywords = [
                 "budget", "spend", "income",
