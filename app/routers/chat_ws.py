@@ -127,47 +127,118 @@ async def chat_socket(websocket: WebSocket):
                     "content": "No family data found."
                 })
                 continue
-
             # -------------------------------------------------
             # Try to get requested month first
             # -------------------------------------------------
+            requested_year = year
+            requested_month = month
+
             monthly = None
 
-            if year and month:
+            # If user specified a month/year
+            if requested_year and requested_month:
                 monthly = db.query(FamilyMonthly).filter(
                     FamilyMonthly.family_id == family.id,
-                    FamilyMonthly.year == year,
-                    FamilyMonthly.month == month
+                    FamilyMonthly.year == requested_year,
+                    FamilyMonthly.month == requested_month
                 ).first()
 
-            # If specific month not found, fallback to latest month
-            if not monthly:
-                monthly = db.query(FamilyMonthly).filter(
-                    FamilyMonthly.family_id == family.id
-                ).order_by(
-                    FamilyMonthly.year.desc(),
-                    FamilyMonthly.month.desc()
-                ).first()
+            # Always get latest available month (base reference)
+            latest_month = db.query(FamilyMonthly).filter(
+                FamilyMonthly.family_id == family.id
+            ).order_by(
+                FamilyMonthly.year.desc(),
+                FamilyMonthly.month.desc()
+            ).first()
 
-            if not monthly:
+            if not latest_month:
                 await websocket.send_json({
                     "type": "assistant_message",
                     "content": "No monthly financial data available yet."
                 })
                 continue
 
-            # -------------------------------------------------
-            # Calculate expense range for that month
-            # -------------------------------------------------
-            last_day = calendar.monthrange(monthly.year, monthly.month)[1]
 
-            start_date = datetime(monthly.year, monthly.month, 1)
-            end_date = datetime(
-                monthly.year,
-                monthly.month,
-                last_day,
-                23, 59, 59
-            )
+            # -------------------------------------------------
+            # If exact month exists → use it
+            # -------------------------------------------------
+            if monthly:
+
+                base_month = monthly
+
+            else:
+                # If requested month doesn't exist,
+                # we predict forward from latest month
+
+                base_month = latest_month
+
+                # If user didn't specify month, just use latest
+                if not requested_year or not requested_month:
+                    requested_year = base_month.year
+                    requested_month = base_month.month
+
+                # Calculate month difference
+                month_diff = (
+                    (requested_year - base_month.year) * 12 +
+                    (requested_month - base_month.month)
+                )
+
+                # If user asks for past month that doesn't exist
+                if month_diff < 0:
+                    await websocket.send_json({
+                        "type": "assistant_message",
+                        "content": "I don't have historical data for that month."
+                    })
+                    continue
+
+                # Predict forward month-by-month
+                predicted_budget = base_month.monthly_budget
+                predicted_balance = base_month.closing_balance
+
+                # Calculate expenses for base month
+                last_day = calendar.monthrange(
+                    base_month.year,
+                    base_month.month
+                )[1]
+
+                start_date = datetime(base_month.year, base_month.month, 1)
+                end_date = datetime(base_month.year, base_month.month, last_day, 23, 59, 59)
+
+                expenses = db.query(ExpenseDB).filter(
+                    ExpenseDB.family_code == family.family_code,
+                    ExpenseDB.created_at >= start_date,
+                    ExpenseDB.created_at <= end_date
+                ).all()
+
+                total_expenses = sum(e.amount for e in expenses)
+
+                savings = base_month.monthly_income - total_expenses
+
+                for _ in range(month_diff):
+                    predicted_budget += (0.05 * savings)
+                    predicted_balance += savings
+
+                await websocket.send_json({
+                    "type": "assistant_message",
+                    "content": f"""
+            Your predicted budget for {requested_month}/{requested_year} is PKR {predicted_budget}.
+            Your predicted opening balance will be PKR {predicted_balance}.
+            """
+                })
+                continue
+
+
+            # -------------------------------------------------
+            # If exact month exists → normal structured AI flow
+            # -------------------------------------------------
+
+            last_day = calendar.monthrange(
+                base_month.year,
+                base_month.month
+            )[1]
+
+            start_date = datetime(base_month.year, base_month.month, 1)
+            end_date = datetime(base_month.year, base_month.month, last_day, 23, 59, 59)
 
             expenses = db.query(ExpenseDB).filter(
                 ExpenseDB.family_code == family.family_code,
@@ -177,40 +248,13 @@ async def chat_socket(websocket: WebSocket):
 
             total_expenses = sum(e.amount for e in expenses)
 
-            # -------------------------------------------------
-            # Deterministic calculation (no AI hallucination)
-            # -------------------------------------------------
-            savings = monthly.monthly_income - total_expenses
-            predicted_budget = monthly.monthly_budget + (0.05 * savings)
-
-            next_year = monthly.year
-            next_month = monthly.month + 1
-
-            if next_month == 13:
-                next_month = 1
-                next_year += 1
-
-            # If user explicitly asks about next month
-            if "next month" in lower_message:
-                await websocket.send_json({
-                    "type": "assistant_message",
-                    "content": f"""
-Your predicted budget for {next_month}/{next_year} is PKR {predicted_budget}.
-Your opening balance will be PKR {monthly.closing_balance}.
-"""
-                })
-                continue
-
-            # -------------------------------------------------
-            # Send structured data to AI for analysis/explanation
-            # -------------------------------------------------
             finance_context = {
-                "year": monthly.year,
-                "month": monthly.month,
-                "opening_balance": monthly.starting_balance,
-                "monthly_income": monthly.monthly_income,
-                "monthly_budget": monthly.monthly_budget,
-                "closing_balance": monthly.closing_balance,
+                "year": base_month.year,
+                "month": base_month.month,
+                "opening_balance": base_month.starting_balance,
+                "monthly_income": base_month.monthly_income,
+                "monthly_budget": base_month.monthly_budget,
+                "closing_balance": base_month.closing_balance,
                 "total_expenses": total_expenses
             }
 
