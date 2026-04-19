@@ -1,7 +1,7 @@
 from fastapi import APIRouter
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-
+from fastapi import Query
 from app.db.database import get_db
 from app.db.models import UserDB
 from app.db.models_family import Family, FamilyMember
@@ -15,9 +15,10 @@ from app.constants.categories import HEAD_CATEGORIES, MEMBER_CATEGORIES
 
 router = APIRouter(prefix="/expense", tags=["expense"])
 
-
 @router.get("/categories")
 def get_categories(
+    month: int = Query(...),   # 🔥 REQUIRED
+    year: int = Query(...),    # 🔥 REQUIRED
     current_user: UserDB = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
@@ -25,7 +26,6 @@ def get_categories(
 
     # ---------------- ROLE CHECK ----------------
     if current_user.role == "member":
-        # 🔥 Auto-assign or fetch member slot
         fm = get_or_assign_member(
             db=db,
             family_code=family_code,
@@ -41,12 +41,35 @@ def get_categories(
         owner_id = None
         base_categories = HEAD_CATEGORIES
 
-    # ---------------- FETCH BUDGETS ----------------
+    # ---------------- FETCH CURRENT MONTH ----------------
     rows = db.query(CategoryBudget).filter(
         CategoryBudget.family_code == family_code,
         CategoryBudget.scope == scope,
-        CategoryBudget.owner_id == owner_id
+        CategoryBudget.owner_id == owner_id,
+        CategoryBudget.month == month,   # 🔥 ADD
+        CategoryBudget.year == year      # 🔥 ADD
     ).all()
+
+    source = "actual"
+
+    # ---------------- FALLBACK (IMPORTANT 🔥) ----------------
+    if not rows:
+        prev_month = month - 1
+        prev_year = year
+
+        if prev_month == 0:
+            prev_month = 12
+            prev_year -= 1
+
+        rows = db.query(CategoryBudget).filter(
+            CategoryBudget.family_code == family_code,
+            CategoryBudget.scope == scope,
+            CategoryBudget.owner_id == owner_id,
+            CategoryBudget.month == prev_month,
+            CategoryBudget.year == prev_year
+        ).all()
+
+        source = "suggested"
 
     db_map = {row.category_name: row for row in rows}
 
@@ -73,9 +96,11 @@ def get_categories(
     return {
         "status": True,
         "role": current_user.role,
+        "month": month,
+        "year": year,
+        "source": source,   # 🔥 tells frontend
         "categories": result
     }
-
 
 @router.post("/add")
 def add_expense(
@@ -83,6 +108,10 @@ def add_expense(
     current_user: UserDB = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
+    # ---------------- GET MONTH/YEAR ----------------
+    current_month = payload.month   
+    current_year = payload.year     
+    
     # ---------------- FAMILY ----------------
     family = db.query(Family).filter(
         Family.family_code == current_user.family_code
@@ -109,7 +138,6 @@ def add_expense(
 
     # ---------------- MEMBER ----------------
     if current_user.role == "member":
-        # 🔥 Auto-link or fetch member slot
         fm = get_or_assign_member(
             db=db,
             family_code=family.family_code,
@@ -132,8 +160,6 @@ def add_expense(
                 raise HTTPException(404, "Member not found in this family")
 
             member_id = chosen.id
-        # scope stays "family"
-        # owner_id stays None
 
     # ---------------- CREATE EXPENSE ----------------
     exp = ExpenseDB(
@@ -151,7 +177,9 @@ def add_expense(
         CategoryBudget.family_code == family.family_code,
         CategoryBudget.category_name == payload.category,
         CategoryBudget.scope == scope,
-        CategoryBudget.owner_id == owner_id
+        CategoryBudget.owner_id == owner_id,
+        CategoryBudget.month == current_month,   # ✅ FIX
+        CategoryBudget.year == current_year      # ✅ FIX
     ).first()
 
     if not row:
@@ -160,6 +188,8 @@ def add_expense(
             category_name=payload.category,
             scope=scope,
             owner_id=owner_id,
+            month=current_month,   # ✅ FIX
+            year=current_year,     # ✅ FIX
             budget=0,
             spent=payload.amount
         )
@@ -181,6 +211,7 @@ def add_expense(
             "member_id": exp.member_id
         }
     }
+
 
 @router.get("/list")
 def list_expenses(

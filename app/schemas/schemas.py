@@ -77,11 +77,16 @@ class AddExpenseRequest(BaseModel):
     amount: float
     member_id: int | None = None   # optional
 
+    month: int 
+    year: int   
+
 class SingleCategoryBudget(BaseModel):
     category: str
     budget: float
 
 class UpdateCategoryBudgetRequest(BaseModel):
+    month: int    
+    year: int      
     budgets: List[SingleCategoryBudget] 
 
 class MonthlySetupRequest(BaseModel):

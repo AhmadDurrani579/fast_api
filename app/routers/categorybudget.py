@@ -8,19 +8,30 @@ from app.deps.deps import get_current_user
 from app.schemas.schemas import UpdateCategoryBudgetRequest  # <-- import
 from app.db.models_family import Family, FamilyMember
 from app.utils.member_utils import get_or_assign_member
+from datetime import datetime   
+
 from app.constants.categories import HEAD_CATEGORIES, MEMBER_CATEGORIES
 router = APIRouter(prefix="/categories", tags=["categories"])
 
-
-@router.post("/update-budget")
 @router.post("/update-budget")
 def update_category_budget(
     payload: UpdateCategoryBudgetRequest,
     current_user: UserDB = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
+    
     family_code = current_user.family_code
 
+    # ✅ GET CURRENT MONTH/YEAR (ADD HERE)
+    current_month = payload.month
+    current_year = payload.year
+
+
+    if current_month < 1 or current_month > 12:
+         raise HTTPException(400, "Invalid month")
+    if current_year < 2000:
+        raise HTTPException(400, "Invalid year")
+    
     # ---------------- DETERMINE SCOPE ----------------
     if current_user.role == "head":
         scope = "family"
@@ -28,7 +39,6 @@ def update_category_budget(
         allowed_categories = [c["name"] for c in HEAD_CATEGORIES]
 
     elif current_user.role == "member":
-        # 🔥 auto-link or fetch member slot
         fm = get_or_assign_member(
             db=db,
             family_code=family_code,
@@ -45,7 +55,6 @@ def update_category_budget(
     # ---------------- UPDATE BUDGETS ----------------
     for item in payload.budgets:
 
-        # 🔒 category-level security
         if item.category not in allowed_categories:
             raise HTTPException(
                 status_code=400,
@@ -58,11 +67,14 @@ def update_category_budget(
                 detail="Budget must be >= 0"
             )
 
+        # ✅ FIX QUERY (ADD month + year)
         row = db.query(CategoryBudget).filter(
             CategoryBudget.family_code == family_code,
             CategoryBudget.category_name == item.category,
             CategoryBudget.scope == scope,
-            CategoryBudget.owner_id == owner_id
+            CategoryBudget.owner_id == owner_id,
+            CategoryBudget.month == current_month,   # 🔥 ADD
+            CategoryBudget.year == current_year      # 🔥 ADD
         ).first()
 
         if row:
@@ -73,6 +85,8 @@ def update_category_budget(
                 category_name=item.category,
                 scope=scope,
                 owner_id=owner_id,
+                month=current_month,   # 🔥 ADD
+                year=current_year,     # 🔥 ADD
                 budget=item.budget,
                 spent=0
             )
@@ -83,5 +97,7 @@ def update_category_budget(
     return {
         "status": True,
         "message": "Category budgets updated successfully",
-        "scope": scope
+        "scope": scope,
+        "month": current_month,   # (optional but good)
+        "year": current_year
     }

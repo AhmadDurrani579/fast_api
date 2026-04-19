@@ -14,6 +14,9 @@ class CategoryBudget(Base):
     scope = Column(String(10), nullable=False)   # "family" | "member"
     owner_id = Column(Integer, nullable=True)    # NULL for family, member_id for member
 
+    month = Column(Integer, nullable=False)
+
+    year = Column(Integer, nullable=False)    
     budget = Column(Float, default=0.0)
     spent = Column(Float, default=0.0)
 
@@ -21,7 +24,7 @@ class CategoryBudget(Base):
 
     __table_args__ = (
         UniqueConstraint(
-            "family_code", "scope", "owner_id", "category_name",
+            "family_code", "scope", "owner_id", "category_name", "month", "year",
             name="uq_category_budget_scope"
         ),
     )
