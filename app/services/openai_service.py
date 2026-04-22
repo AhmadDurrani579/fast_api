@@ -13,7 +13,7 @@ class OpenAIService:
             self.client = OpenAI(api_key=settings.OPENAI_API_KEY)
         
         self.system_prompt = """
-            You are FinanceAI, a smart and friendly personal finance assistant.
+            You are AI, a smart and friendly personal finance assistant.
 
             ––––––––––––––––––––
             CORE RULES
