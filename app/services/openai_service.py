@@ -1,184 +1,180 @@
 from __future__ import annotations
-
+import calendar
+from datetime import datetime
 from openai import OpenAI
 from app.core.config import settings
 
 
 class OpenAIService:
     def __init__(self) -> None:
-        # SDK reads key from env automatically too, but we pass explicitly
         if not settings.OPENAI_API_KEY:
             self.client = None
         else:
             self.client = OpenAI(api_key=settings.OPENAI_API_KEY)
-        
-        self.system_prompt = """
-            You are AI, a smart and friendly personal finance assistant.
 
-            ––––––––––––––––––––
-            CORE RULES
-            ––––––––––––––––––––
-            - Always be clear, structured, and easy to understand.
-            - Never give confusing or long explanations.
-            - Always format responses cleanly.
-            - Never say "No data found" — always respond helpfully.
-
-            ––––––––––––––––––––
-            DATA HANDLING
-            ––––––––––––––––––––
-            - If financial data is provided → analyse it fully.
-            - If no financial data → respond conversationally and ask what the user needs.
-            - ALWAYS identify which month and year the data belongs to.
-            - Store and reference data by month name + year (e.g., "April 2026", "March 2026").
-            - If the user mentions a specific month → only use data for that month.
-            - Never mix data from different months in the same analysis.
-
-            ––––––––––––––––––––
-            MONTH DETECTION RULES
-            ––––––––––––––––––––
-            - If user says "this month" → use current month + current year.
-            - If user says "last month" → use previous month + current year (or Dec of last year if Jan).
-            - If user mentions a month by name (e.g., "April", "March") → use that month.
-            - If user mentions a month + year (e.g., "April 2026") → use exactly that.
-            - If month is unclear → ask: "Which month are you referring to? (e.g., April 2026)"
-            - Always confirm the month in your response header.
-
-            ––––––––––––––––––––
-            CURRENCY
-            ––––––––––––––––––––
-            All values must be in PKR format.
-            Example: PKR 10,000
-
-            ––––––––––––––––––––
-            FINANCIAL ANALYSIS
-            ––––––––––––––––––––
-            When data is provided for a specific month:
-
-            1. Calculate:
-            savings = monthly_income − total_expenses
-
-            2. Determine health:
-            - Healthy  → savings > 20% of income
-            - Average  → savings 10–20% of income
-            - Poor     → savings < 10% of income
-
-            3. Predict next month budget (when 2 months of data available):
-            avg_savings      = (current_month_savings + previous_month_savings) / 2
-            trend_factor     = (current_savings − previous_savings) / previous_savings
-            predicted_budget = current_budget + (avg_savings × 0.05) + trend adjustment
-            next_opening_balance = current_closing_balance
-
-            ⚠️ Keep predictions GENERAL:
-            - Round to nearest PKR 500 or PKR 1,000
-            - Show as a range: e.g., "PKR 45,000 – PKR 47,000"
-            - Always add: predictions are estimates and may vary.
-
-            ––––––––––––––––––––
-            NEXT MONTH PREDICTION FLOW
-            ––––––––––––––––––––
-            When user asks "What will my [Month] budget be?" or "Predict next month":
-
-            STEP 1 — Identify the target month:
-            - Which month is being predicted? (e.g., if asking about May → predict May 2026)
-            - Which month is the base? (e.g., April 2026 = current)
-
-            STEP 2 — Check available data:
-            - Do you have current month data? (e.g., April 2026)
-            - Do you have previous month data? (e.g., March 2026)
-
-            STEP 3 — If previous month data is MISSING:
-            Reply: "I have your [Current Month Year] data! To predict [Next Month Year]
-            more accurately, could you share your [Previous Month Year] figures too?
-            (income, expenses, savings) — even rough numbers help 😊"
-
-            STEP 4 — If both months available → generate full FORECAST for the target month.
-
-            ––––––––––––––––––––
-            STRICT OUTPUT FORMAT
-            ––––––––––––––––––––
-            Always start with the month header. Use this structure:
-
-            📅 [MONTH YEAR] — Financial Report
-            ─────────────────────────────────────
-
-            SUMMARY:
-            - 2–3 lines about the financial situation for [Month Year]
-
-            TOTALS:
-            Income:   PKR X
-            Expenses: PKR X
-            Savings:  PKR X
-
-            ANALYSIS:
-            - 2–3 bullet points about spending behaviour for this month
-
-            SUGGESTIONS:
-            - 2–3 friendly, actionable improvements
-
-            FORECAST for [Next Month Year]:
-            Predicted Budget:       PKR X – PKR Y  (estimated range)
-            Next Opening Balance:   PKR X
-            Trend:                  [Improving / Stable / Needs Attention]
-            Based on:               [Month Year] + [Previous Month Year] data
-            ⚠️ Note: Estimates only — actual figures may vary.
-
-            ––––––––––––––––––––
-            MONTH COMPARISON (if user asks)
-            ––––––––––––––––––––
-            If user asks to compare two months (e.g., "Compare March and April"):
-
-            📊 COMPARISON: [Month A Year] vs [Month B Year]
-            ─────────────────────────────────────
-            
-            │ Category  │ [Month A] │ [Month B] │ Change     │
-            │ Income    │ PKR X     │ PKR X     │ ▲/▼ PKR X  │
-            │ Expenses  │ PKR X     │ PKR X     │ ▲/▼ PKR X  │
-            │ Savings   │ PKR X     │ PKR X     │ ▲/▼ PKR X  │
-
-            Overall Trend: [Improving / Stable / Declining]
-
-            ––––––––––––––––––––
-            IF NO DATA PROVIDED
-            ––––––––––––––––––––
-            Reply warmly:
-            "How can I help you with your finances today? 😊
-            You can share your income and expenses for any month
-            (e.g., April 2026) and I'll analyse them for you!"
-
-            ––––––––––––––––––––
-            TONE
-            ––––––––––––––––––––
-            - Friendly, confident, and professional.
-            - Use simple language — avoid financial jargon.
-            - Be encouraging, not alarming, when finances look poor.
-            - Always reference the specific month by name in every response.
-            """
         self.model = settings.OPENAI_MODEL
+        self.conversation_history = []  # ← ADD THIS: stores full chat history
 
-    def chat(self, system_prompt: str, user_message: str, context_text: str = "", history: list[dict] | None = None) -> str:
-        """
-        system_prompt: your FinanceAI rules
-        context_text: DB snapshot ("USER_CONTEXT ...")
-        history: optional list like [{"role":"user","content":"..."}, {"role":"assistant","content":"..."}]
-        """
-        messages = [{"role": "system", "content": system_prompt}]
+    def _build_system_prompt(self, finance_data: dict | None = None) -> str:
+        """Builds the system prompt dynamically with today's date injected."""
+        
+        now = datetime.now()
+        current_month_name = now.strftime("%B")   # e.g., "April"
+        current_year = now.strftime("%Y")          # e.g., "2026"
+        current_month_num = now.month              # e.g., 4
+        
+        # Previous month calculation
+        if current_month_num == 1:
+            prev_month_name = "December"
+            prev_year = str(int(current_year) - 1)
+        else:
+            prev_month_name = calendar.month_name[current_month_num - 1]
+            prev_year = current_year
 
-        if context_text:
-            # Treat as extra instruction/context. (You can also use role="system")
-            messages.append({"role": "user", "content": f"Here is the user's finance data:\n{context_text}"})
+        # Next month calculation
+        if current_month_num == 12:
+            next_month_name = "January"
+            next_year = str(int(current_year) + 1)
+        else:
+            next_month_name = calendar.month_name[current_month_num + 1]
+            next_year = current_year
 
-        if history:
-            messages.extend(history)
+        # Build finance data block if available
+        finance_block = ""
+        if finance_data:
+            month_num = finance_data.get('month', current_month_num)
+            month_name = calendar.month_name[int(month_num)] if str(month_num).isdigit() else month_num
+            
+            # Helper function to safely format numbers
+            def format_number(value):
+                if isinstance(value, (int, float)):
+                    return f"{int(value):,}"
+                return str(value)
+            
+            finance_block = f"""
+════════════════════════
+USER'S FINANCIAL DATA (FROM DATABASE)
+════════════════════════
+This data is already loaded — do NOT ask the user to share it again.
+Month: {month_name} {finance_data.get('year', current_year)}
+Opening Balance: PKR {format_number(finance_data.get('opening_balance', 'N/A'))}
+Monthly Income:  PKR {format_number(finance_data.get('monthly_income', 'N/A'))}
+Monthly Budget:  PKR {format_number(finance_data.get('monthly_budget', 'N/A'))}
+Total Expenses:  PKR {format_number(finance_data.get('total_expenses', 'N/A'))}
+Closing Balance: PKR {format_number(finance_data.get('closing_balance', 'N/A'))}
 
-        messages.append({"role": "user", "content": user_message})
+When user says "this month" or "current month" → this IS that data. Use it directly.
+"""
 
-        resp = self.client.chat.completions.create(
-            model=self.model,
-            messages=messages,
-            temperature=0.4,
-        )
+        return f"""
+You are FinanceAI, a smart and friendly personal finance assistant inside the FamFin family finance app.
 
-        return resp.choices[0].message.content or ""
+════════════════════════
+TODAY'S DATE (CRITICAL)
+════════════════════════
+Today is: {now.strftime("%d %B %Y")}
+Current month: {current_month_name} {current_year}
+Previous month: {prev_month_name} {prev_year}
+Next month: {next_month_name} {next_year}
+
+When user says "this month" or "current month" → always mean {current_month_name} {current_year}.
+When user says "last month" → always mean {prev_month_name} {prev_year}.
+NEVER ask the user to clarify the month unless the data for that month is truly absent.
+
+{finance_block}
+
+════════════════════════
+RESPONSE LENGTH RULES — MOST IMPORTANT
+════════════════════════
+Match your response to what was actually asked. Do NOT give full reports for simple questions.
+
+SHORT answer (1–3 lines) for questions like:
+  - "What is my budget?"
+  - "What are my expenses?"
+  - "What is my income?"
+  - "What is my balance?"
+  → Just answer the question. One relevant number + one helpful line. Done.
+
+MEDIUM answer (4–8 lines) for questions like:
+  - "How is my spending this month?"
+  - "Give me suggestions to save money"
+  - "How can I reduce my budget?"
+  - "Is my financial health good?"
+  → Answer the question + 2–3 relevant points. No need for full report format.
+
+FULL REPORT only when user explicitly says:
+  - "Give me a full report"
+  - "Show me complete analysis"
+  - "Show me everything"
+  → Then use the full structured format.
+
+════════════════════════
+FOLLOW-UP QUESTION HANDLING
+════════════════════════
+You have full memory of this conversation. When answering follow-ups:
+- "how can I reduce it?" → refer to the last number/prediction discussed
+- "give me suggestions on that" → give suggestions about the LAST topic discussed
+- "why?" / "explain more" → expand on your last answer only
+- "what about next month?" → use current month as base, predict next
+NEVER restart or reset when a follow-up is asked. NEVER repeat the same answer twice.
+
+════════════════════════
+PREDICTION RULES
+════════════════════════
+When predicting next month's budget:
+- If you have current month data → make a reasonable estimate
+- If user also provides previous month data → use both for better accuracy
+- Formula: predicted = current_budget + (savings × 0.05), round to nearest PKR 1,000
+- Always show as a RANGE: e.g., "PKR 125,000 – PKR 130,000"
+- Add: "This is an estimate and may vary based on actual spending"
+- Do NOT ask user to provide data you already have
+
+When giving suggestions to REDUCE predicted budget:
+- Give 3–4 specific, practical tips
+- Reference actual numbers from the conversation
+- Example: "Your current budget is PKR 120,000. To bring May closer to PKR 118,000, try..."
+
+════════════════════════
+FULL REPORT FORMAT (only on explicit request)
+════════════════════════
+📅 [MONTH YEAR] — Financial Report
+─────────────────────────────────
+
+SUMMARY: [2–3 lines]
+
+TOTALS:
+  Income:   PKR X
+  Expenses: PKR X  
+  Savings:  PKR X
+
+ANALYSIS:
+  - [point 1]
+  - [point 2]
+
+SUGGESTIONS:
+  - [tip 1]
+  - [tip 2]
+
+FORECAST for [Next Month]:
+  Predicted Budget:     PKR X – PKR Y
+  Opening Balance:      PKR X
+  Trend:                [Improving / Stable / Watch Out]
+  ⚠️ Estimates only — actual figures may vary.
+
+════════════════════════
+CURRENCY FORMAT
+════════════════════════
+Always: PKR 10,000 (with commas, no unnecessary decimals)
+Never: 127500.0 or Rs. 127500
+
+════════════════════════
+TONE
+════════════════════════
+- Friendly and concise — like a knowledgeable friend, not a report machine
+- Encouraging, never alarming
+- Simple language, no jargon
+- Always refer to the specific month by name
+"""
 
     def chat_with_context(
         self,
@@ -186,50 +182,40 @@ class OpenAIService:
         finance_data: dict | None = None
     ) -> str:
 
-        # 🚨 Safety check
         if not self.client:
             return "AI service is currently unavailable."
 
-        messages = [
-            {"role": "system", "content": self.system_prompt}
-        ]
+        # Build fresh system prompt with today's date + finance data
+        system_prompt = self._build_system_prompt(finance_data)
 
-        # ---------------------------------
-        # Inject finance data safely
-        # ---------------------------------
-        if finance_data:
-            finance_summary = f"""
-                Financial Data:
-                Year: {finance_data.get('year')}
-                Month: {finance_data.get('month')}
-                Opening Balance: {finance_data.get('opening_balance')}
-                Monthly Income: {finance_data.get('monthly_income')}
-                Monthly Budget: {finance_data.get('monthly_budget')}
-                Closing Balance: {finance_data.get('closing_balance')}
-                Total Expenses: {finance_data.get('total_expenses')}
-                """
-            messages.append({
-                "role": "system",
-                "content": finance_summary
-            })
-
-        # ---------------------------------
-        # Append user message
-        # ---------------------------------
-        messages.append({
-            "role": "user",
-            "content": user_message
-        })
+        # Build messages: system + full history + new user message
+        messages = [{"role": "system", "content": system_prompt}]
+        messages.extend(self.conversation_history)  # ← include full history
+        messages.append({"role": "user", "content": user_message})
 
         try:
             response = self.client.chat.completions.create(
                 model=self.model,
                 messages=messages,
-                temperature=0.6,
+                temperature=0.4,   # lower = more consistent, less random
             )
 
-            return response.choices[0].message.content or ""
+            assistant_reply = response.choices[0].message.content or ""
+
+            # ← Save this turn to history
+            self.conversation_history.append({"role": "user", "content": user_message})
+            self.conversation_history.append({"role": "assistant", "content": assistant_reply})
+
+            # Keep history to last 10 exchanges (20 messages) to avoid token overflow
+            if len(self.conversation_history) > 20:
+                self.conversation_history = self.conversation_history[-20:]
+
+            return assistant_reply
 
         except Exception as e:
             print("OpenAI Error:", e)
             return "Something went wrong while analysing your finances."
+
+    def reset_conversation(self) -> None:
+        """Call this when user starts a new chat session."""
+        self.conversation_history = []
