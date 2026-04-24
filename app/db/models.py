@@ -26,7 +26,7 @@ class UserDB(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     family = relationship("Family", back_populates="head", uselist=False)
     usage = relationship("UserUsage", back_populates="user", uselist=False)
-    
+
 class UserUsage(Base):
     __tablename__ = "user_usage"
     id = Column(Integer, primary_key=True, index=True)
@@ -34,7 +34,9 @@ class UserUsage(Base):
     request_count = Column(Integer, default=0)
     plan_type = Column(String, default="free")
     is_paid = Column(Boolean, default=False)
+    month = Column(Integer)
 
+    year = Column(Integer)
     # 🔗 Relationship back to user
     user = relationship("UserDB", back_populates="usage")
 
