@@ -16,7 +16,7 @@ router = APIRouter()
 ai = OpenAIService()
 date_extractor = DateExtractor()
 
-MAX_FREE_REQUESTS = 3
+MAX_FREE_REQUESTS = 113
 
 
 def verify_jwt(token: str):
