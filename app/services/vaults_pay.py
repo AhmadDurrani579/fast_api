@@ -90,7 +90,7 @@ class VaultsPayService:
             }
             data = {
                 "amount": str(amount),
-                "expiryInSeconds": "1",
+                "expiryInSeconds": "0",
                 "schemaCode": method_code,   #  IMPORTANT
                 "channelName": "web"
             }
