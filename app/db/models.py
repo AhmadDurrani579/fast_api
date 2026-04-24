@@ -2,6 +2,7 @@ from sqlalchemy import Column, Integer, String, Enum, ForeignKey, DateTime, Text
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.db.database import Base
+from sqlalchemy import Boolean
 import enum
 
 
@@ -24,7 +25,20 @@ class UserDB(Base):
     otp_expiry = Column(DateTime, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     family = relationship("Family", back_populates="head", uselist=False)
+    usage = relationship("UserUsage", back_populates="user", uselist=False)
     
+class UserUsage(Base):
+    __tablename__ = "user_usage"
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("user_accounts.id", ondelete="CASCADE"), unique=True, nullable=False)
+    request_count = Column(Integer, default=0)
+    plan_type = Column(String, default="free")
+    is_paid = Column(Boolean, default=False)
+
+    # 🔗 Relationship back to user
+    user = relationship("UserDB", back_populates="usage")
+
+
 # class PostDB(Base):
 #     __tablename__ = "posts"
 #     id = Column(Integer, primary_key=True, index=True)

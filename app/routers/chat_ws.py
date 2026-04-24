@@ -10,6 +10,17 @@ from app.db.models_expenses import ExpenseDB
 from app.services.date_extractor import DateExtractor
 from datetime import datetime
 import calendar
+from app.db.models import UserUsage
+
+def get_or_create_usage(db: Session, user_id: int):
+    usage = db.query(UserUsage).filter(UserUsage.user_id == user_id).first()
+    if not usage:
+        usage = UserUsage(user_id=user_id)
+        db.add(usage)
+        db.commit()
+        db.refresh(usage)
+    return usage
+
 
 router = APIRouter()
 ai = OpenAIService()
@@ -50,6 +61,8 @@ async def chat_socket(websocket: WebSocket):
 
     db: Session = SessionLocal()
 
+    MAX_FREE_REQUESTS = 3
+
     try:
         while True:
 
@@ -63,8 +76,30 @@ async def chat_socket(websocket: WebSocket):
                 continue
 
             user_message = data["content"].strip()
+
+            # 🔹 Get usage
+            usage = get_or_create_usage(db, user_id)
+
+            # 🔹 Monthly reset (VERY IMPORTANT)
+            now = datetime.utcnow()
+
+            if usage.month != now.month or usage.year != now.year:
+                usage.request_count = 0
+                usage.is_paid = False
+                usage.month = now.month
+                usage.year = now.year
+                db.commit()
+
             lower_message = user_message.lower()
 
+            # 🔹 Limit check
+            if not usage.is_paid and usage.request_count >= MAX_FREE_REQUESTS:
+                await websocket.send_json({
+                    "type": "limit_reached",
+                    "allowed": False
+                })
+                continue           
+            
             # -------------------------------
             # Greeting handling
             # -------------------------------
@@ -77,7 +112,7 @@ async def chat_socket(websocket: WebSocket):
                     "content": "Hello! I'm your finance assistant. How can I help you today?"
                 })
                 continue
-
+                
             # -------------------------------
             # Check finance intent
             # -------------------------------
@@ -100,6 +135,8 @@ async def chat_socket(websocket: WebSocket):
                     "type": "assistant_message",
                     "content": ai_reply
                 })
+                usage.request_count += 1
+                db.commit()
                 continue
 
             # -------------------------------
@@ -258,7 +295,8 @@ Your predicted opening balance will be PKR {predicted_balance}.
                 "type": "assistant_message",
                 "content": ai_reply
             })
-
+            usage.request_count += 1
+            db.commit()
     except WebSocketDisconnect:
         pass
 

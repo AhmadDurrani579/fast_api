@@ -108,3 +108,20 @@ class VaultsPayService:
                 "status": "error",
                 "message": str(e)
             }
+        
+        
+    def verify_payment(self, payment_id):
+        token = self.get_token()
+        url = f"{self.BASE_URL}/get-merchant-payment-details"
+        headers = {
+            "accessToken": token
+        }
+        data = {
+            "paymentId": payment_id
+        }
+        response = requests.post(url, data=data, headers=headers)
+        result = response.json()
+        #  Adjust based on real response
+        if result.get("data", {}).get("status") == "success":
+            return {"status": "success"}
+        return {"status": "failed"}
