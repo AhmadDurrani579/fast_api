@@ -40,3 +40,71 @@ class VaultsPayService:
         self.token_expiry_time = time.time() + expiry - 30  # buffer
 
         return token
+    
+    def get_payment_methods(self):
+        try:
+            token = self.get_token()
+            url = f"{self.BASE_URL}/get-vaultspay-allowed-payment-methods"
+            headers = {
+                "accessToken": token
+            }
+            data = {
+                "currencyCode": "aed",
+                "channelName": "web"
+            }
+            response = requests.post(url, data=data, headers=headers)
+            if response.status_code != 200:
+                raise Exception("VaultsPay API failed")
+            raw = response.json()
+            for item in raw.get("data", []):
+                if item.get("name") in ["Visa/Master TEST", "Visa/Master"]:
+                    return {
+                        "status": "success",
+                        "method_code": item.get("code")
+                    }
+
+            return {
+                "status": "error",
+                "message": "Visa/Master method not found"
+            }
+
+        except Exception as e:
+            return {
+                "status": "error",
+                "message": str(e)
+            }
+        
+    def initiate_payment(self, amount):
+        try:
+            #  Step 1: Get token
+            token = self.get_token()
+            #  Step 2: Get method code (SCM_01)
+            method_data = self.get_payment_methods()
+            if method_data["status"] != "success":
+                raise Exception("Method code not found")
+            method_code = method_data["method_code"]
+            #  Step 3: Call initialize payment API
+            url = f"{self.BASE_URL}/initialize-merchant-payment"
+            headers = {
+                "accessToken": token
+            }
+            data = {
+                "amount": str(amount),
+                "expiryInSeconds": "1",
+                "schemaCode": method_code,   #  IMPORTANT
+                "channelName": "web"
+            }
+            response = requests.post(url, data=data, headers=headers)
+            if response.status_code != 200:
+                raise Exception("Payment initialization failed")
+            result = response.json()
+            return {
+                "status": "success",
+                "payment_url": result["data"]["paymentUrl"],
+                "payment_id": result["data"]["paymentId"]
+            }
+        except Exception as e:
+            return {
+                "status": "error",
+                "message": str(e)
+            }
