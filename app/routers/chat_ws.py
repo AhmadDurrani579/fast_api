@@ -1,4 +1,3 @@
-import asyncio
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from jose import jwt, JWTError
 from app.core.config import settings
@@ -12,150 +11,190 @@ from datetime import datetime
 import calendar
 from app.db.models import UserUsage
 
-def get_or_create_usage(db: Session, user_id: int):
-    usage = db.query(UserUsage).filter(UserUsage.user_id == user_id).first()
-    if not usage:
-        usage = UserUsage(user_id=user_id)
-        db.add(usage)
-        db.commit()
-        db.refresh(usage)
-    return usage
-
 
 router = APIRouter()
 ai = OpenAIService()
 date_extractor = DateExtractor()
 
+MAX_FREE_REQUESTS = 3
 
-# Simple helper to decode and verify JWT token.
-# Returns the payload if valid, otherwise None.
+
 def verify_jwt(token: str):
     try:
-        payload = jwt.decode(
+        return jwt.decode(
             token,
             settings.JWT_SECRET,
             algorithms=[settings.JWT_ALGORITHM]
         )
-        return payload
     except JWTError:
         return None
+
+
+def get_or_create_usage(db: Session, user_id: int):
+    now = datetime.utcnow()
+
+    usage = db.query(UserUsage).filter(UserUsage.user_id == user_id).first()
+
+    if not usage:
+        usage = UserUsage(
+            user_id=user_id,
+            request_count=0,
+            is_paid=False,
+            plan_type="free",
+            month=now.month,
+            year=now.year
+        )
+        db.add(usage)
+        db.commit()
+        db.refresh(usage)
+
+    if usage.month != now.month or usage.year != now.year:
+        usage.request_count = 0
+        usage.is_paid = False
+        usage.plan_type = "free"
+        usage.month = now.month
+        usage.year = now.year
+        db.commit()
+        db.refresh(usage)
+
+    return usage
+
+
+def increment_usage(db: Session, usage: UserUsage):
+    usage.request_count += 1
+    db.commit()
+    db.refresh(usage)
+
+
+def get_month_expenses(db: Session, family_code: str, year: int, month: int):
+    last_day = calendar.monthrange(year, month)[1]
+
+    start_date = datetime(year, month, 1)
+    end_date = datetime(year, month, last_day, 23, 59, 59)
+
+    expenses = db.query(ExpenseDB).filter(
+        ExpenseDB.family_code == family_code,
+        ExpenseDB.created_at >= start_date,
+        ExpenseDB.created_at <= end_date
+    ).all()
+
+    return sum(e.amount for e in expenses)
+
+
+async def send_and_count(websocket: WebSocket, db: Session, usage: UserUsage, content: str):
+    await websocket.send_json({
+        "type": "assistant_message",
+        "allowed": True,
+        "content": content,
+        "used_requests": usage.request_count + 1,
+        "remaining_requests": max(MAX_FREE_REQUESTS - (usage.request_count + 1), 0),
+        "is_paid": usage.is_paid
+    })
+
+    if not usage.is_paid:
+        increment_usage(db, usage)
 
 
 @router.websocket("/ws/chat")
 async def chat_socket(websocket: WebSocket):
 
     token = websocket.query_params.get("token")
+
     if not token:
         await websocket.close(code=1008)
         return
 
-    token = token.strip()
-    user = verify_jwt(token)
+    user = verify_jwt(token.strip())
 
     if not user:
         await websocket.close(code=1008)
         return
 
-    await websocket.accept()
     user_id = user.get("id")
+
+    if not user_id:
+        await websocket.close(code=1008)
+        return
+
+    await websocket.accept()
 
     db: Session = SessionLocal()
 
-    MAX_FREE_REQUESTS = 3
-
     try:
         while True:
-
             data = await websocket.receive_json()
 
-            if "content" not in data:
+            if "content" not in data or not str(data["content"]).strip():
                 await websocket.send_json({
                     "type": "error",
                     "message": "Invalid payload"
                 })
                 continue
 
-            user_message = data["content"].strip()
-
-            # 🔹 Get usage
-            usage = get_or_create_usage(db, user_id)
-
-            # 🔹 Monthly reset (VERY IMPORTANT)
-            now = datetime.utcnow()
-
-            if usage.month != now.month or usage.year != now.year:
-                usage.request_count = 0
-                usage.is_paid = False
-                usage.month = now.month
-                usage.year = now.year
-                db.commit()
-
+            user_message = str(data["content"]).strip()
             lower_message = user_message.lower()
 
-            # 🔹 Limit check
+            usage = get_or_create_usage(db, user_id)
+
+            print("Count:", usage.request_count, "Paid:", usage.is_paid)
+
             if not usage.is_paid and usage.request_count >= MAX_FREE_REQUESTS:
                 await websocket.send_json({
                     "type": "limit_reached",
-                    "allowed": False
-                })
-                continue           
-            
-            # -------------------------------
-            # Greeting handling
-            # -------------------------------
-            greetings = ["hi", "hello", "hey"]
-
-            words = lower_message.split()
-            if words and words[0] in greetings:
-                await websocket.send_json({
-                    "type": "assistant_message",
-                    "content": "Hello! I'm your finance assistant. How can I help you today?"
+                    "allowed": False,
+                    "message": "Free limit reached. Please upgrade.",
+                    "used_requests": usage.request_count,
+                    "remaining_requests": 0,
+                    "is_paid": usage.is_paid
                 })
                 continue
-                
-            # -------------------------------
-            # Check finance intent
-            # -------------------------------
+
+            greetings = ["hi", "hello", "hey", "salam", "assalamualaikum"]
+            words = lower_message.split()
+
+            if words and words[0] in greetings and len(words) <= 3:
+                await websocket.send_json({
+                    "type": "assistant_message",
+                    "allowed": True,
+                    "content": "Hello! I'm your finance assistant. How can I help you today?",
+                    "used_requests": usage.request_count,
+                    "remaining_requests": max(MAX_FREE_REQUESTS - usage.request_count, 0),
+                    "is_paid": usage.is_paid
+                })
+                continue
+
             finance_keywords = [
-                "budget", "spend", "income",
-                "expenses", "saving", "balance"
+                "budget", "spend", "spent", "income", "expense", "expenses",
+                "saving", "savings", "balance", "db", "database",
+                "month", "monthly", "march", "april", "february",
+                "january", "may", "june", "july", "august",
+                "september", "october", "november", "december",
+                "previous month", "last month", "this month", "next month"
             ]
 
-            requires_finance = any(
-                word in lower_message for word in finance_keywords
-            )
+            requires_finance = any(word in lower_message for word in finance_keywords)
 
             if not requires_finance:
                 ai_reply = ai.chat_with_context(
                     user_message=user_message,
                     finance_data=None
                 )
-
-                await websocket.send_json({
-                    "type": "assistant_message",
-                    "content": ai_reply
-                })
-                usage.request_count += 1
-                db.commit()
+                await send_and_count(websocket, db, usage, ai_reply)
                 continue
 
-            # -------------------------------
-            # Get family
-            # -------------------------------
             family = db.query(Family).filter(
                 Family.head_id == user_id
             ).first()
 
             if not family:
-                await websocket.send_json({
-                    "type": "assistant_message",
-                    "content": "No family data found."
-                })
+                await send_and_count(
+                    websocket,
+                    db,
+                    usage,
+                    "No family data found for your account."
+                )
                 continue
 
-            # -------------------------------
-            # Get latest month
-            # -------------------------------
             latest_month = db.query(FamilyMonthly).filter(
                 FamilyMonthly.family_id == family.id
             ).order_by(
@@ -164,17 +203,15 @@ async def chat_socket(websocket: WebSocket):
             ).first()
 
             if not latest_month:
-                await websocket.send_json({
-                    "type": "assistant_message",
-                    "content": "No monthly financial data available yet."
-                })
+                await send_and_count(
+                    websocket,
+                    db,
+                    usage,
+                    "No monthly financial data available yet."
+                )
                 continue
 
-            # -------------------------------
-            # Handle relative month queries
-            # -------------------------------
             if "next month" in lower_message:
-
                 target_year = latest_month.year
                 target_month = latest_month.month + 1
 
@@ -184,8 +221,7 @@ async def chat_socket(websocket: WebSocket):
 
                 month_diff = 1
 
-            elif "last month" in lower_message:
-
+            elif "last month" in lower_message or "previous month" in lower_message:
                 target_year = latest_month.year
                 target_month = latest_month.month - 1
 
@@ -195,67 +231,39 @@ async def chat_socket(websocket: WebSocket):
 
                 month_diff = -1
 
-            elif "this month" in lower_message:
-
+            elif "this month" in lower_message or "current month" in lower_message:
                 target_year = latest_month.year
                 target_month = latest_month.month
                 month_diff = 0
 
             else:
-                # Absolute month request (April 2026)
                 month_data = date_extractor.extract_month_year(user_message)
-                target_year = month_data["year"]
-                target_month = month_data["month"]
 
-                if not target_year or not target_month:
+                target_year = month_data.get("year")
+                target_month = month_data.get("month")
+
+                if target_month and not target_year:
                     target_year = latest_month.year
+
+                if not target_month:
                     target_month = latest_month.month
+                    target_year = latest_month.year
 
                 month_diff = (
                     (target_year - latest_month.year) * 12 +
                     (target_month - latest_month.month)
                 )
 
-            # -------------------------------
-            # If past data not available
-            # -------------------------------
-            if month_diff < 0:
-                await websocket.send_json({
-                    "type": "assistant_message",
-                    "content": "I don't have historical data for that month."
-                })
-                continue
-
-            # -------------------------------
-            # Calculate savings from latest month
-            # -------------------------------
-            last_day = calendar.monthrange(
-                latest_month.year,
-                latest_month.month
-            )[1]
-
-            start_date = datetime(latest_month.year, latest_month.month, 1)
-            end_date = datetime(
-                latest_month.year,
-                latest_month.month,
-                last_day,
-                23, 59, 59
-            )
-
-            expenses = db.query(ExpenseDB).filter(
-                ExpenseDB.family_code == family.family_code,
-                ExpenseDB.created_at >= start_date,
-                ExpenseDB.created_at <= end_date
-            ).all()
-
-            total_expenses = sum(e.amount for e in expenses)
-
-            savings = latest_month.monthly_income - total_expenses
-
-            # -------------------------------
-            # If future month prediction
-            # -------------------------------
+            # Future prediction
             if month_diff > 0:
+                latest_total_expenses = get_month_expenses(
+                    db,
+                    family.family_code,
+                    latest_month.year,
+                    latest_month.month
+                )
+
+                savings = latest_month.monthly_income - latest_total_expenses
 
                 predicted_budget = latest_month.monthly_budget
                 predicted_balance = latest_month.closing_balance
@@ -264,26 +272,51 @@ async def chat_socket(websocket: WebSocket):
                     predicted_budget += (0.05 * savings)
                     predicted_balance += savings
 
-                await websocket.send_json({
-                    "type": "assistant_message",
-                    "content": f"""
-Your predicted budget for {target_month}/{target_year} is PKR {predicted_budget}.
-Your predicted opening balance will be PKR {predicted_balance}.
-"""
-                })
+                await send_and_count(
+                    websocket,
+                    db,
+                    usage,
+                    f"Your predicted budget for {target_month}/{target_year} is PKR {predicted_budget:,.0f}. "
+                    f"Your predicted opening balance will be PKR {predicted_balance:,.0f}."
+                )
                 continue
 
-            # -------------------------------
-            # Exact month exists → use AI
-            # -------------------------------
+            # Past/current month lookup from DB
+            target_data = db.query(FamilyMonthly).filter(
+                FamilyMonthly.family_id == family.id,
+                FamilyMonthly.year == target_year,
+                FamilyMonthly.month == target_month
+            ).first()
+
+            if not target_data:
+                await send_and_count(
+                    websocket,
+                    db,
+                    usage,
+                    f"No financial data is available for {target_month}/{target_year}."
+                )
+                continue
+
+            total_expenses = get_month_expenses(
+                db,
+                family.family_code,
+                target_data.year,
+                target_data.month
+            )
+
+            remaining_budget = target_data.monthly_budget - total_expenses
+            savings = target_data.monthly_income - total_expenses
+
             finance_context = {
-                "year": latest_month.year,
-                "month": latest_month.month,
-                "opening_balance": latest_month.starting_balance,
-                "monthly_income": latest_month.monthly_income,
-                "monthly_budget": latest_month.monthly_budget,
-                "closing_balance": latest_month.closing_balance,
-                "total_expenses": total_expenses
+                "year": target_data.year,
+                "month": target_data.month,
+                "opening_balance": target_data.starting_balance,
+                "monthly_income": target_data.monthly_income,
+                "monthly_budget": target_data.monthly_budget,
+                "closing_balance": target_data.closing_balance,
+                "total_expenses": total_expenses,
+                "remaining_budget": remaining_budget,
+                "savings": savings
             }
 
             ai_reply = ai.chat_with_context(
@@ -291,12 +324,8 @@ Your predicted opening balance will be PKR {predicted_balance}.
                 finance_data=finance_context
             )
 
-            await websocket.send_json({
-                "type": "assistant_message",
-                "content": ai_reply
-            })
-            usage.request_count += 1
-            db.commit()
+            await send_and_count(websocket, db, usage, ai_reply)
+
     except WebSocketDisconnect:
         pass
 
