@@ -238,22 +238,16 @@ async def chat_socket(websocket: WebSocket):
 
             else:
                 month_data = date_extractor.extract_month_year(user_message)
-
-                target_year = month_data.get("year")
                 target_month = month_data.get("month")
-
-                if target_month and not target_year:
-                    target_year = latest_month.year
-
+                target_year = month_data.get("year")
                 if not target_month:
                     target_month = latest_month.month
+                if not target_year or target_year < latest_month.year:
                     target_year = latest_month.year
-
                 month_diff = (
                     (target_year - latest_month.year) * 12 +
                     (target_month - latest_month.month)
                 )
-
             # Future prediction
             if month_diff > 0:
                 latest_total_expenses = get_month_expenses(
