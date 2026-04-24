@@ -7,7 +7,7 @@ class VaultsPayService:
     
     def __init__(self):
         self.client_id = "ID-4564629946"
-        self.client_secret = "SECRET-XXXXX"
+        self.client_secret = "SECRET-A17238A7-7568-48F4-94C1-98EA73AB9F65"
         
         self.access_token = None
         self.token_expiry_time = 0
