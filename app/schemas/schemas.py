@@ -101,13 +101,18 @@ class MonthlySetupRequest(BaseModel):
 # User Output Schema
 # ------------------------
 
+class SubscriptionOut(BaseModel):
+    is_paid: bool
+    plan_type: str
+
 class UserOut(BaseModel):
     id: int
     full_name: str
     email: EmailStr
     family_code: Optional[str] = None
     role: str
-
+    subscription: Optional[SubscriptionOut] = None
+    
     class Config:
         from_attributes = True
 

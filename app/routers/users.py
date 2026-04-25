@@ -5,7 +5,7 @@ from app.schemas.schemas import UserOut
 from app.db.models import UserDB, UserUsage
 from app.deps.deps import get_current_user
 from app.db.database import get_db
-
+from app.schemas.schemas import SubscriptionOut
 router = APIRouter(prefix="/users", tags=["users"])
 
 
@@ -26,14 +26,15 @@ def me(
         is_paid = bool(usage.is_paid)
         plan = usage.plan_type or "free"
 
+    user_data = UserOut.from_orm(current_user)
+
+    user_data.subscription = SubscriptionOut(
+        is_paid=is_paid,
+        plan_type=plan
+    )    
+
     return {
         "status": True,
         "message": "User profile fetched successfully",
-        "user": UserOut.from_orm(current_user),
-
-        # 🔥 Minimal subscription info
-        "subscription": {
-            "is_paid": is_paid,
-            "plan_type": plan
-        }
+        "user": user_data
     }
