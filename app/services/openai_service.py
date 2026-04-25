@@ -8,157 +8,160 @@ class OpenAIService:
 
     def __init__(self) -> None:
         self.client = OpenAI(api_key=settings.OPENAI_API_KEY) if settings.OPENAI_API_KEY else None
-        self.model = settings.OPENAI_MODEL
+        self.model  = settings.OPENAI_MODEL
 
-        # ─── Base identity prompt (always injected) ───
+        # ─── Base identity & tone (always injected first) ───
         self.base_system_prompt = """
-You are FinanceAI, a smart, friendly, and professional personal finance assistant
-for a family budgeting application.
+You are FinanceAI — a smart, friendly personal finance assistant built into a family budgeting app.
+You're like a knowledgeable friend who understands money — warm, direct, and easy to talk to.
 
-CORE RULES:
-- Always be clear, structured, and concise.
-- All currency values must be in PKR format: e.g. PKR 10,000
-- Always reference the specific month and year by name in every response (e.g. "April 2026").
-- Never mix data from different months in the same analysis.
-- Never make up numbers — only use the data provided to you.
-- Be encouraging, not alarming, even when finances look poor.
-- Keep responses clean and well-formatted using simple text, not HTML.
-- Use emojis sparingly but warmly.
+━━━ TONE — THIS IS YOUR MOST IMPORTANT RULE ━━━
+
+Talk like a helpful human friend, NOT like a bank statement or a corporate report.
+
+✅ GOOD tone examples:
+  "So in February, your income was PKR 150,000 and you budgeted PKR 120,000.
+   You spent PKR 114,900 in total — which means you were actually under budget
+   by PKR 5,100. Not bad at all! 💪"
+
+  "Groceries went a bit over — PKR 27,500 against a PKR 25,000 budget.
+   Happens to everyone, honestly. The bigger issue is Dining Out, which
+   was PKR 3,200 over. That's the one worth watching."
+
+❌ BAD tone examples (never do this):
+  "OVERVIEW: Income: PKR 150,000 | Budget Set: PKR 120,000"
+  "📅 February 2026 — Financial Summary ─────────"
+  "FINANCIAL HEALTH: Needs Attention"
+  Pipe-separated tables, rigid headers, robotic labels
+
+━━━ FORMATTING RULES ━━━
+- NO big headers, NO report-style titles, NO pipe tables
+- Open naturally: "So for February..." or "Looking at March..." or "Here's the thing..."
+- Use short paragraphs — 2-3 sentences max per paragraph
+- Bullet points only when listing 3+ categories — keep them short
+- Mobile users are reading this on a small screen — keep it tight
+- Use 1-2 emojis max per response — only where they genuinely add warmth
+- Never write walls of text
+
+━━━ DATA RULES ━━━
+- Never make up numbers — only use data provided to you
+- Always mention the month by name (e.g. "February 2026")
+- Never mix data from different months in the same response
+- All amounts in PKR: PKR 10,000 / PKR 1,50,000
+
+━━━ IF NO DATA PROVIDED ━━━
+Reply warmly and ask what they need:
+"Hey! I'm here to help with your family finances 😊
+Ask me about your budget for any month, get a prediction
+for next month, or ask how to cut down on spending."
 """
 
     # ─────────────────────────────────────────────
-    # INTENT-SPECIFIC SYSTEM PROMPTS
+    # INTENT PROMPTS — conversational style
     # ─────────────────────────────────────────────
 
     def _budget_lookup_prompt(self) -> str:
         return """
-TASK: Budget Lookup for a specific month.
+TASK: The user is asking about their budget for a specific month.
 
-The user is asking about their budget and financial summary for a given month.
-You will be given:
-- Opening balance, monthly income, monthly budget, closing balance
-- Total expenses for the month
-- A category_breakdown list showing per-category budget vs actual spending
+You have their full financial data for that month including category-level breakdown.
 
-Your response MUST follow this exact format:
+HOW TO RESPOND:
+1. Open with a natural 1-2 sentence summary of how the month looks overall.
+   e.g. "So in February 2026, you brought in PKR 150,000 and set yourself
+   a budget of PKR 120,000. Overall you spent PKR 114,900 — decent control!"
 
-📅 [MONTH YEAR] — Financial Summary
-─────────────────────────────────────
+2. Give the key numbers in plain sentences (NOT a table):
+   Income, budget set, total spent, remaining budget, savings.
 
-OVERVIEW:
-Income:           PKR X
-Budget Set:       PKR X
-Total Spent:      PKR X
-Remaining Budget: PKR X
-Savings:          PKR X
-Opening Balance:  PKR X
-Closing Balance:  PKR X
+3. Talk through the categories conversationally:
+   - Lead with the overspent ones — mention the specific overage amount
+   - Then briefly note the well-managed ones
+   - Keep it short — don't list every category robotically
 
-CATEGORY BREAKDOWN:
-For each category show: Category | Budgeted | Spent | Remaining | Status
-Status = ✅ On Track / ⚠️ Near Limit (>80% used) / 🔴 Over Budget
+4. End with 1-2 sentences on financial health — warm and encouraging even if bad.
 
-FINANCIAL HEALTH: [Healthy / Average / Needs Attention]
-- Healthy  → savings > 20% of income
-- Average  → savings 10–20% of income
-- Needs Attention → savings < 10% of income
-
-QUICK INSIGHT:
-- 2–3 bullet points about spending behaviour this month.
+RULES:
+- Do NOT use headers like "OVERVIEW:" or "CATEGORY BREAKDOWN:"
+- Do NOT use pipe tables
+- Keep the whole response under 200 words
+- Sound like a friend giving a quick money check-in, not a bank report
 """
 
     def _prediction_prompt(self) -> str:
         return """
-TASK: Budget Prediction for a future month.
+TASK: The user wants a budget prediction for a future month.
 
-The user wants a predicted budget for an upcoming month.
-You will be given:
-- Current month's income, budget, expenses, savings, closing balance
-- Up to 3 previous months of data for trend analysis
-- Current category budgets and expenses
+You have current month data, up to 3 previous months of history,
+and current category spending patterns.
 
-Your response MUST follow this exact format:
+HOW TO RESPOND:
+1. Open by acknowledging what data you're basing this on.
+   e.g. "Based on your last 2 months, here's what I'd expect for May 2026..."
+   or "Looking at your March numbers, here's a rough forecast for April..."
 
-🔮 BUDGET FORECAST — [TARGET MONTH YEAR]
-─────────────────────────────────────
+2. Give the prediction conversationally:
+   - Estimated income (usually same as current unless trend shows change)
+   - Predicted budget range — always a range, e.g. PKR 118,000 – PKR 122,000
+   - Expected opening balance (= current closing balance)
+   - Rough savings estimate
 
-BASED ON: [list the months used for this prediction]
+3. Call out 1-2 categories that look like they might cause problems next month
+   based on recent trends — specific and practical.
 
-PREDICTED FIGURES:
-Estimated Income:          PKR X (based on [current/avg] income)
-Predicted Budget:          PKR X,XXX – PKR X,XXX  ← always show as a range
-Predicted Opening Balance: PKR X  (= current closing balance)
-Estimated Savings:         PKR X – PKR X
+4. Close with a brief encouraging note about what to watch.
 
-PREDICTION METHOD:
-- Show how many months of data were used
-- If 3 months: use rolling average of savings to adjust budget
-- If 2 months: use simple trend
-- If 1 month: use conservative estimate with ±5% range
-- Round all figures to nearest PKR 500
-
-CATEGORY PREDICTIONS:
-For each budgeted category, suggest a predicted budget for next month
-based on spending patterns. Flag any categories trending upward.
-
-TREND: [Improving 📈 / Stable ➡️ / Needs Attention 📉]
-
-⚠️ Note: These are estimates based on historical data. Actual figures may vary.
+RULES:
+- Always show budget as a RANGE (±5%) — never a single exact figure
+- Always add one line: "This is an estimate — actual figures will vary."
+- Do NOT use rigid headers or tables
+- Keep under 180 words
+- More months of data = more confident tone. Less data = more cautious tone.
+  If only 1 month available, say "Based on just one month of data, this is
+  a rough estimate — I'll get more accurate as we have more history."
 """
 
     def _spending_control_prompt(self) -> str:
         return """
-TASK: Spending Control Analysis & Advice.
+TASK: The user wants advice on controlling their spending.
 
-The user wants to understand where they are overspending and how to improve.
-You will be given:
-- Monthly income, budget, total expenses
-- A detailed category_breakdown showing per-category budget vs actual spending
-  including: category name, budgeted amount, spent amount, % used, whether overspent
+You have their full category breakdown showing what was budgeted vs actually spent.
 
-Your response MUST follow this exact format:
+HOW TO RESPOND:
+1. Start with a quick, honest overall picture — 1-2 sentences.
+   e.g. "Honestly, this month wasn't too bad overall — but there are
+   2-3 categories that are quietly eating into your budget."
 
-💡 SPENDING ANALYSIS — [MONTH YEAR]
-─────────────────────────────────────
+2. Call out the overspent categories specifically:
+   - Name the category, say how much over, give ONE specific actionable tip
+   - Be conversational: "Dining Out was PKR 3,200 over budget — eating out
+     twice a week adds up fast. Even cutting one meal out a week could
+     save you around PKR 1,600 a month."
 
-OVERALL STATUS:
-Total Budget:  PKR X
-Total Spent:   PKR X
-Difference:    PKR X (Over/Under budget)
+3. Briefly praise the well-managed categories — 1 sentence max.
 
-🔴 OVERSPENT CATEGORIES:
-For each overspent category:
-• [Category]: Budgeted PKR X → Spent PKR X (X% over)
-  → Tip: [1 specific, actionable tip for this category]
+4. End with a concrete savings opportunity:
+   e.g. "If you trim Dining Out and Entertainment by around 20%,
+   you could free up roughly PKR 4,000 extra every month."
 
-⚠️ NEAR LIMIT CATEGORIES (80–100% used):
-• [Category]: PKR X remaining
-
-✅ WELL-MANAGED CATEGORIES:
-• List categories under 70% of budget — brief praise
-
-TOP 3 RECOMMENDATIONS:
-1. [Most impactful change to make]
-2. [Second most impactful]
-3. [Third most impactful]
-
-SAVINGS OPPORTUNITY:
-If you reduce spending in [top 2 overspent cats] by [X%],
-you could save an extra PKR X per month.
-
-Keep advice specific, friendly, and actionable. Avoid generic advice like "spend less".
+RULES:
+- Be specific — use the actual numbers from the data
+- No generic advice like "spend less" or "create a budget"
+- No headers, no tables, no pipe characters
+- Warm and encouraging tone — never make them feel bad
+- Keep under 220 words
+- The goal is 2-3 actionable insights, not an exhaustive list
 """
 
     def _general_finance_prompt(self) -> str:
         return """
-TASK: General finance conversation.
+TASK: General finance question — no specific month data provided.
 
-The user is asking a general finance question not tied to specific month data.
-Respond helpfully and conversationally. If the question is about budgeting strategy,
-savings tips, or financial planning, give practical advice.
-
-Keep the response concise — 3–5 sentences or a short bullet list.
-Always offer to look up their specific data if relevant.
+Respond helpfully and conversationally, like a knowledgeable friend.
+If it's a budgeting or savings question, give practical real-world advice.
+Keep it to 3-5 sentences or a short bullet list.
+Offer to look up their specific data if relevant.
+Never be preachy or overly formal.
 """
 
     # ─────────────────────────────────────────────
@@ -167,91 +170,85 @@ Always offer to look up their specific data if relevant.
 
     def _format_finance_context(self, finance_data: dict) -> str:
         """
-        Converts the finance_data dict into a structured text block
-        injected as a system message so the model has clean data to work with.
+        Converts finance_data into a clean labelled text block
+        injected as a system message. The model reads this as raw data
+        and uses it to generate a conversational response.
         """
-        intent = finance_data.get("intent", "budget_lookup")
-        month_num = finance_data.get("month") or finance_data.get("current_month")
-        year = finance_data.get("year") or finance_data.get("current_year")
-        month_name = calendar.month_name[month_num] if month_num else "Unknown"
+        intent   = finance_data.get("intent", "budget_lookup")
+        month_n  = finance_data.get("month") or finance_data.get("current_month")
+        year     = finance_data.get("year")  or finance_data.get("current_year")
+        month_name = calendar.month_name[month_n] if month_n else "Unknown"
 
         lines = [
-            "═══ FINANCIAL DATA ═══",
+            "━━━ USER FINANCIAL DATA ━━━",
             f"Month: {month_name} {year}",
             f"Intent: {intent}",
             "",
         ]
 
         # Core financials
-        for key, label in [
-            ("opening_balance", "Opening Balance"),
-            ("monthly_income", "Monthly Income"),
-            ("monthly_budget", "Monthly Budget"),
-            ("closing_balance", "Closing Balance"),
-            ("total_expenses", "Total Expenses"),
+        field_labels = [
+            ("opening_balance",  "Opening Balance"),
+            ("monthly_income",   "Monthly Income"),
+            ("monthly_budget",   "Monthly Budget"),
+            ("closing_balance",  "Closing Balance"),
+            ("total_expenses",   "Total Expenses"),
             ("remaining_budget", "Remaining Budget"),
-            ("savings", "Savings"),
-            ("current_savings", "Current Savings"),
-        ]:
-            if finance_data.get(key) is not None:
-                lines.append(f"{label}: PKR {finance_data[key]:,.0f}")
+            ("savings",          "Savings"),
+            ("current_savings",  "Current Savings"),
+        ]
+        for key, label in field_labels:
+            val = finance_data.get(key)
+            if val is not None:
+                lines.append(f"{label}: PKR {val:,.0f}")
 
-        # Category breakdown (budget_lookup / spending_control)
+        # Category breakdown
         cat_breakdown = finance_data.get("category_breakdown", [])
         if cat_breakdown:
             lines.append("")
-            lines.append("─── CATEGORY BREAKDOWN ───")
+            lines.append("── Category Breakdown ──")
             for cat in cat_breakdown:
-                status = "🔴 OVER BUDGET" if cat.get("overspent") else (
-                    "⚠️ NEAR LIMIT" if cat.get("percent_used", 0) >= 80 else "✅ OK"
-                )
+                if cat.get("overspent"):
+                    status = "OVER BUDGET"
+                elif cat.get("percent_used", 0) >= 80:
+                    status = "NEAR LIMIT"
+                else:
+                    status = "OK"
+
                 lines.append(
-                    f"  {cat['category']} [{cat.get('scope','family')}]: "
+                    f"  {cat['category']} ({cat.get('scope','family')}): "
                     f"Budget PKR {cat['budget']:,.0f} | "
                     f"Spent PKR {cat['spent']:,.0f} | "
                     f"Remaining PKR {cat['remaining']:,.0f} | "
                     f"{cat.get('percent_used', 0)}% used | {status}"
                 )
 
-        # Prediction-specific data
+        # Prediction-specific fields
         if intent == "prediction":
             target_month = finance_data.get("target_month")
-            target_year = finance_data.get("target_year")
+            target_year  = finance_data.get("target_year")
             if target_month and target_year:
                 lines.append("")
-                lines.append(f"Target Prediction Month: {calendar.month_name[target_month]} {target_year}")
+                lines.append(f"Predicting For: {calendar.month_name[target_month]} {target_year}")
                 lines.append(f"Months Ahead: {finance_data.get('months_ahead', 1)}")
 
             prev_months = finance_data.get("previous_months", [])
             if prev_months:
                 lines.append("")
-                lines.append("─── HISTORICAL DATA ───")
+                lines.append("── Historical Data ──")
                 for pm in prev_months:
-                    pm_name = calendar.month_name[pm["month"]]
                     lines.append(
-                        f"  {pm_name} {pm['year']}: "
+                        f"  {calendar.month_name[pm['month']]} {pm['year']}: "
                         f"Income PKR {pm['monthly_income']:,.0f} | "
                         f"Budget PKR {pm['monthly_budget']:,.0f} | "
                         f"Closing Balance PKR {pm['closing_balance']:,.0f}"
                     )
             else:
                 lines.append("")
-                lines.append("Historical Data: Only current month available (1 month of data)")
+                lines.append("Historical Data: Only current month available — use cautious estimate.")
 
-            # Category budgets & expenses for prediction
-            cat_budgets = finance_data.get("category_budgets", [])
-            cat_expenses = finance_data.get("category_expenses", {})
-            if cat_budgets:
-                lines.append("")
-                lines.append("─── CURRENT CATEGORY SPENDING ───")
-                for cb in cat_budgets:
-                    spent = cat_expenses.get(cb["category"], 0)
-                    lines.append(
-                        f"  {cb['category']}: Budget PKR {cb['budget']:,.0f} | "
-                        f"Spent PKR {spent:,.0f}"
-                    )
-
-        lines.append("═══════════════════════")
+        lines.append("")
+        lines.append("━━━━━━━━━━━━━━━━━━━━━━━━━")
         return "\n".join(lines)
 
     # ─────────────────────────────────────────────
@@ -269,7 +266,7 @@ Always offer to look up their specific data if relevant.
 
         intent = finance_data.get("intent") if finance_data else "general"
 
-        # Pick the right task-specific prompt
+        # Pick the right task prompt
         intent_prompt_map = {
             "budget_lookup":    self._budget_lookup_prompt(),
             "prediction":       self._prediction_prompt(),
@@ -284,12 +281,12 @@ Always offer to look up their specific data if relevant.
             {"role": "system", "content": task_prompt},
         ]
 
-        # Inject structured finance data if available
+        # Inject structured finance data
         if finance_data:
             formatted = self._format_finance_context(finance_data)
             messages.append({
                 "role": "system",
-                "content": f"Here is the user's financial data for this request:\n\n{formatted}"
+                "content": f"Here is the user's financial data — use this to respond:\n\n{formatted}"
             })
 
         messages.append({"role": "user", "content": user_message})
@@ -298,14 +295,14 @@ Always offer to look up their specific data if relevant.
             response = self.client.chat.completions.create(
                 model=self.model,
                 messages=messages,
-                temperature=0.4,   # Lower = more consistent, factual responses
-                max_tokens=1000,
+                temperature=0.5,
+                max_tokens=600,
             )
             return response.choices[0].message.content or ""
 
         except Exception as e:
             print(f"[OpenAI Error] {e}")
-            return "Something went wrong while analysing your finances. Please try again."
+            return "Something went wrong while checking your finances. Please try again in a moment."
 
     # ─────────────────────────────────────────────
     # LEGACY METHOD (kept for compatibility)
@@ -328,6 +325,6 @@ Always offer to look up their specific data if relevant.
         resp = self.client.chat.completions.create(
             model=self.model,
             messages=messages,
-            temperature=0.4,
+            temperature=0.5,
         )
         return resp.choices[0].message.content or ""
