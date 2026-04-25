@@ -4,7 +4,8 @@ from app.core.config import settings
 from app.services.openai_service import OpenAIService
 from sqlalchemy.orm import Session
 from app.db.database import SessionLocal
-from app.db.models_family import Family, FamilyMonthly, CategoryBudget
+from app.db.models_family import Family, FamilyMonthly
+from app.db.categories_budget import CategoryBudget
 from app.db.models_expenses import ExpenseDB
 from app.services.date_extractor import DateExtractor
 from datetime import datetime
