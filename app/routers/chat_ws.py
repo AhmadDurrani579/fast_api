@@ -10,7 +10,7 @@ from app.db.models_expenses import ExpenseDB
 from app.services.date_extractor import DateExtractor
 from datetime import datetime
 import calendar
-from app.db.models import UserUsage
+from app.db.models import UserUsage, UserDB
 from app.db.models_chat import ChatMessage
 from app.deps.deps import get_current_user
 from app.db.database import get_db
