@@ -1,4 +1,4 @@
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Depends
 from jose import jwt, JWTError
 from app.core.config import settings
 from app.services.openai_service import OpenAIService
