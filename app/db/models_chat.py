@@ -19,7 +19,7 @@ class ChatMessage(Base):
     # user OR assistant
     role = Column(String(20), nullable=False)
 
-    message = Column(Text, nullable=False)
+    content = Column(Text, nullable=False)
 
     created_at = Column(
         DateTime(timezone=True),

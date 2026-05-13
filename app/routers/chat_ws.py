@@ -500,7 +500,7 @@ def save_chat(db: Session, user_id: int, role: str, message: str):
         chat = ChatMessage(
             user_id=user_id,
             role=role,
-            message=message
+            content=message
         )
 
         db.add(chat)
@@ -524,7 +524,7 @@ def get_chat_history(
         response.append({
             "id": chat.id,
             "role": chat.role,
-            "message": chat.message,
+            "message": chat.content,
             "created_at": chat.created_at
         })
 
