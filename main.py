@@ -13,7 +13,7 @@ from app.routers import budget
 # from openai import OpenAI
 from app.routers import chat_ws
 from app.routers.payment import router as vault_router
-from app.routers import chat_history
+from app.routers import chat_ws
 # create missing tables (won't alter existing columns)
 Base.metadata.create_all(bind=engine)
 
@@ -47,7 +47,8 @@ app.include_router(categorybudget.router)
 app.include_router(budget.router)
 app.include_router(chat_ws.router)
 app.include_router(vault_router)
-app.include_router(chat_history.router)
+app.include_router(chat_ws.router)
+
 # app.include_router(users.router)
 # app.include_router(posts.router)
 # app.include_router(comments.router)
