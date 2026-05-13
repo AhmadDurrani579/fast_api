@@ -12,6 +12,8 @@ from datetime import datetime
 import calendar
 from app.db.models import UserUsage
 from app.db.models_chat import ChatMessage
+from app.deps.deps import get_current_user
+
 router = APIRouter()
 ai = OpenAIService()
 date_extractor = DateExtractor()
