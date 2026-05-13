@@ -20,13 +20,33 @@ class UserDB(Base):
     password = Column(String(255), nullable=False)
 
     role = Column(String(20), nullable=False)  # "head" or "member"
-    family_code = Column(String(10), nullable=True)  # Only for members
+    family_code = Column(String(10), nullable=True)
+
     otp_code = Column(String(6), nullable=True)
     otp_expiry = Column(DateTime, nullable=True)
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    family = relationship("Family", back_populates="head", uselist=False)
-    usage = relationship("UserUsage", back_populates="user", uselist=False)
 
+    created_at = Column(
+        DateTime(timezone=True),
+        server_default=func.now()
+    )
+
+    family = relationship(
+        "Family",
+        back_populates="head",
+        uselist=False
+    )
+
+    usage = relationship(
+        "UserUsage",
+        back_populates="user",
+        uselist=False
+    )
+
+    chats = relationship(
+        "ChatMessage",
+        back_populates="user",
+        cascade="all, delete-orphan"
+    )
 class UserUsage(Base):
     __tablename__ = "user_usage"
     id = Column(Integer, primary_key=True, index=True)
@@ -41,35 +61,3 @@ class UserUsage(Base):
     user = relationship("UserDB", back_populates="usage")
 
 
-# class PostDB(Base):
-#     __tablename__ = "posts"
-#     id = Column(Integer, primary_key=True, index=True)
-#     user_id = Column(Integer, ForeignKey("user_accounts.id", ondelete="CASCADE"), nullable=False)
-#     content = Column(Text, nullable=True)
-#     image_url = Column(String(300), nullable=True)
-#     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
-
-#     user = relationship("UserDB")
-#     comments = relationship("CommentDB", backref="post", cascade="all, delete-orphan")
-#     likes = relationship("LikeDB", back_populates="post", cascade="all, delete-orphan")
-
-# class CommentDB(Base):
-#     __tablename__ = "comments"
-#     id = Column(Integer, primary_key=True, index=True)
-#     content = Column(Text, nullable=False)
-#     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
-#     post_id = Column(Integer, ForeignKey("posts.id", ondelete="CASCADE"), nullable=False)
-#     user_id = Column(Integer, ForeignKey("user_accounts.id", ondelete="CASCADE"), nullable=False)
-#     user = relationship("UserDB")
-
-# class LikeDB(Base):
-#     __tablename__ = "likes"
-#     id = Column(Integer, primary_key=True, index=True)
-#     user_id = Column(Integer, ForeignKey("user_accounts.id", ondelete="CASCADE"), nullable=False)
-#     post_id = Column(Integer, ForeignKey("posts.id", ondelete="CASCADE"), nullable=False)
-#     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
-
-#     __table_args__ = (UniqueConstraint("user_id", "post_id", name="unique_like"),)
-
-#     user = relationship("UserDB")
-#     post = relationship("PostDB", back_populates="likes")

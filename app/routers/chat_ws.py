@@ -11,7 +11,7 @@ from app.services.date_extractor import DateExtractor
 from datetime import datetime
 import calendar
 from app.db.models import UserUsage
-
+from app.db.models_chat import ChatMessage
 router = APIRouter()
 ai = OpenAIService()
 date_extractor = DateExtractor()
@@ -298,8 +298,10 @@ async def chat_socket(websocket: WebSocket):
                 continue
 
             user_message = str(data["content"]).strip()
-            usage = get_or_create_usage(db, user_id)
+            #  Save user message
 
+            save_chat(db, user_id, "user", user_message)
+            usage = get_or_create_usage(db, user_id)
             print(f"[Chat] user_id={user_id} | count={usage.request_count} | paid={usage.is_paid}")
 
             # ── Usage gate ──
@@ -319,26 +321,31 @@ async def chat_socket(websocket: WebSocket):
 
             # ── Greeting — no usage count ──
             if intent == "greeting":
+
+                greeting_message = (
+                    "Hello! I'm FinanceAI, your personal finance assistant 💰\n\n"
+                    "I can help you with:\n"
+                    "• Your monthly budget breakdown\n"
+                    "• Spending predictions for next month\n"
+                    "• Tips to control and reduce your expenses\n\n"
+                    "What would you like to know?"
+                )
+                save_chat(db, user_id, "assistant", greeting_message)
                 await websocket.send_json({
                     "type": "assistant_message",
                     "allowed": True,
-                    "content": (
-                        "Hello! I'm FinanceAI, your personal finance assistant 💰\n\n"
-                        "I can help you with:\n"
-                        "• Your monthly budget breakdown\n"
-                        "• Spending predictions for next month\n"
-                        "• Tips to control and reduce your expenses\n\n"
-                        "What would you like to know?"
-                    ),
+                    "content": greeting_message,
                     "used_requests": usage.request_count,
                     "remaining_requests": max(MAX_FREE_REQUESTS - usage.request_count, 0),
                     "is_paid": usage.is_paid
                 })
-                continue
 
+                continue
             # ── General non-finance chat ──
             if intent == "general":
                 ai_reply = ai.chat_with_context(user_message=user_message, finance_data=None)
+                save_chat(db, user_id, "assistant", ai_reply)
+                
                 await send_and_count(websocket, db, usage, ai_reply)
                 continue
 
@@ -395,6 +402,8 @@ async def chat_socket(websocket: WebSocket):
                 }
 
                 ai_reply = ai.chat_with_context(user_message=user_message, finance_data=finance_context)
+                save_chat(db, user_id, "assistant", ai_reply)
+
                 await send_and_count(websocket, db, usage, ai_reply)
                 continue
 
@@ -429,6 +438,8 @@ async def chat_socket(websocket: WebSocket):
                 }
 
                 ai_reply = ai.chat_with_context(user_message=user_message, finance_data=finance_context)
+                save_chat(db, user_id, "assistant", ai_reply)
+
                 await send_and_count(websocket, db, usage, ai_reply)
                 continue
 
@@ -471,6 +482,8 @@ async def chat_socket(websocket: WebSocket):
             }
 
             ai_reply = ai.chat_with_context(user_message=user_message, finance_data=finance_context)
+            save_chat(db, user_id, "assistant", ai_reply)
+
             await send_and_count(websocket, db, usage, ai_reply)
 
     except WebSocketDisconnect:
@@ -478,3 +491,41 @@ async def chat_socket(websocket: WebSocket):
 
     finally:
         db.close()
+    
+
+def save_chat(db: Session, user_id: int, role: str, message: str):
+        chat = ChatMessage(
+            user_id=user_id,
+            role=role,
+            message=message
+        )
+
+        db.add(chat)
+        db.commit()
+
+@router.get("/history")
+def get_chat_history(
+    current_user: UserDB = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    chats = (
+        db.query(ChatMessage)
+        .filter(ChatMessage.user_id == current_user.id)
+        .order_by(ChatMessage.created_at.asc())
+        .all()
+    )
+
+    response = []
+
+    for chat in chats:
+        response.append({
+            "id": chat.id,
+            "role": chat.role,
+            "message": chat.message,
+            "created_at": chat.created_at
+        })
+
+    return {
+        "status": True,
+        "messages": response
+    }
